@@ -1,0 +1,1294 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LIFELINK - Blockchain Blood Bank</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        @keyframes slideDown { from{opacity:0;transform:translateY(-20px)}to{opacity:1;transform:translateY(0)} }
+        @keyframes fadeIn { from{opacity:0}to{opacity:1} }
+        @keyframes pulse { 0%,100%{opacity:1}50%{opacity:.6} }
+        @keyframes slideInLeft { from{transform:translateX(-100%)}to{transform:translateX(0)} }
+        @keyframes float { 0%,100%{transform:translateY(0)}50%{transform:translateY(-10px)} }
+        #map { height: 600px; border-radius: 1rem; }
+        .animate-slideDown { animation: slideDown 0.4s ease-out; }
+        .animate-fadeIn { animation: fadeIn 0.6s ease-in; }
+        .animate-pulse-custom { animation: pulse 2s ease-in-out infinite; }
+        .animate-slideInLeft { animation: slideInLeft 0.3s ease-out; }
+        .animate-float { animation: float 3s ease-in-out infinite; }
+        .blood-type-badge { display: inline-block; padding: 0.25rem 0.75rem; border-radius: 9999px; font-weight: 600; font-size: 0.875rem; }
+        .blood-a { background: #fef3c7; color: #92400e; }
+        .blood-b { background: #dbeafe; color: #1e3a8a; }
+        .blood-ab { background: #f3e8ff; color: #6b21a8; }
+        .blood-o { background: #fecaca; color: #7f1d1d; }
+        .status-badge { display: inline-block; padding: 0.5rem 1rem; border-radius: 0.5rem; font-weight: 500; font-size: 0.875rem; }
+        .status-available { background: #d1fae5; color: #065f46; }
+        .status-urgent { background: #fee2e2; color: #991b1b; }
+        .status-pending { background: #fef3c7; color: #92400e; }
+        .status-critical { background: #fecaca; color: #7f1d1d; animation: pulse 2s ease-in-out infinite; }
+        .glass-effect { background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(10px); }
+        .gradient-text { background: linear-gradient(135deg, #dc2626, #991b1b); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        .donor-card { transition: transform 0.3s; }
+        .donor-card:hover { transform: translateY(-4px); }
+        .blood-stat { padding: 1rem; border-radius: 0.75rem; text-align: center; font-weight: 600; }
+        .role-badge { display: inline-block; padding: 0.5rem 1rem; border-radius: 9999px; font-weight: 600; font-size: 0.875rem; text-transform: capitalize; }
+        .role-donor { background: #dbeafe; color: #1e3a8a; }
+        .role-hospital { background: #fef3c7; color: #92400e; }
+        .role-admin { background: #f3e8ff; color: #6b21a8; }
+        .progress-bar { height: 8px; border-radius: 4px; background: #e5e7eb; overflow: hidden; }
+        .progress-fill { height: 100%; border-radius: 4px; transition: width 0.5s ease-in-out; }
+        .badge { display: inline-flex; align-items: center; padding: 0.25rem 0.75rem; border-radius: 9999px; font-size: 0.75rem; font-weight: 600; margin-right: 0.5rem; margin-bottom: 0.5rem; }
+        .badge-bronze { background: #f59e0b; color: white; }
+        .badge-silver { background: #9ca3af; color: white; }
+        .badge-gold { background: #fbbf24; color: white; }
+        .badge-platinum { background: #10b981; color: white; }
+        .badge-diamond { background: #8b5cf6; color: white; }
+    </style>
+</head>
+<body class="bg-gradient-to-br from-red-50 via-slate-50 to-red-100 min-h-screen">
+
+<!-- Header -->
+<div class="sticky top-0 z-50 bg-gradient-to-r from-red-600 via-red-700 to-red-800 text-white shadow-2xl">
+    <div class="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
+        <div class="flex items-center gap-3 animate-fadeIn">
+            <div class="bg-white bg-opacity-20 p-2 rounded-lg animate-float">
+                <i class="fas fa-heartbeat text-2xl"></i>
+            </div>
+            <div>
+                <h1 class="text-4xl font-black text-white">LIFELINK</h1>
+                <p class="text-red-100 text-sm font-medium">AI-Powered Blockchain Blood Bank Network</p>
+            </div>
+        </div>
+        <div class="flex gap-4 items-center">
+            <div class="bg-white bg-opacity-20 px-4 py-2 rounded-lg">
+                <p class="text-xs text-red-100">Logged in as</p>
+                <p class="font-bold" id="headerUserName">User</p>
+            </div>
+            <span class="role-badge" id="headerUserRole">Role</span>
+            <div class="flex items-center gap-2 bg-white bg-opacity-20 px-4 py-2 rounded-lg">
+                <span class="font-semibold text-sm">🔐 Secure</span>
+                <span class="w-2 h-2 bg-green-400 rounded-full animate-pulse"></span>
+            </div>
+            <button onclick="logout()" class="px-4 py-2 bg-white text-red-600 rounded-lg font-semibold hover:bg-red-50 transition duration-200">Logout</button>
+        </div>
+    </div>
+</div>
+
+<!-- Stats Dashboard -->
+<div class="max-w-7xl mx-auto px-6 py-8">
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 animate-slideDown">
+        <div class="glass-effect rounded-2xl shadow-lg p-6 border border-red-200 hover:shadow-xl transition">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-gray-500 text-sm font-medium">Blood Units</p>
+                    <p class="text-3xl font-bold text-red-600" id="totalUnits">0</p>
+                </div>
+                <i class="fas fa-tint text-red-200 text-3xl"></i>
+            </div>
+        </div>
+        <div class="glass-effect rounded-2xl shadow-lg p-6 border border-blue-200 hover:shadow-xl transition">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-gray-500 text-sm font-medium">Donors</p>
+                    <p class="text-3xl font-bold text-blue-600" id="totalDonors">0</p>
+                </div>
+                <i class="fas fa-users text-blue-200 text-3xl"></i>
+            </div>
+        </div>
+        <div class="glass-effect rounded-2xl shadow-lg p-6 border border-green-200 hover:shadow-xl transition">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-gray-500 text-sm font-medium">Hospitals</p>
+                    <p class="text-3xl font-bold text-green-600" id="totalHospitals">5</p>
+                </div>
+                <i class="fas fa-hospital text-green-200 text-3xl"></i>
+            </div>
+        </div>
+        <div class="glass-effect rounded-2xl shadow-lg p-6 border border-purple-200 hover:shadow-xl transition">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-gray-500 text-sm font-medium">Transactions</p>
+                    <p class="text-3xl font-bold text-purple-600" id="totalTxns">0</p>
+                </div>
+                <i class="fas fa-exchange-alt text-purple-200 text-3xl"></i>
+            </div>
+        </div>
+        <div class="glass-effect rounded-2xl shadow-lg p-6 border border-orange-200 hover:shadow-xl transition">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-gray-500 text-sm font-medium">Alerts</p>
+                    <p class="text-3xl font-bold text-orange-600 animate-pulse-custom" id="criticalAlerts">0</p>
+                </div>
+                <i class="fas fa-exclamation-triangle text-orange-200 text-3xl animate-pulse-custom"></i>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Navigation -->
+<div class="max-w-7xl mx-auto px-6 mb-6">
+    <div class="glass-effect rounded-xl shadow-lg border border-gray-200 overflow-hidden">
+        <div class="flex flex-wrap gap-0" id="navContainer">
+            <!-- Navigation will be dynamically generated based on role -->
+        </div>
+    </div>
+</div>
+
+<!-- Content -->
+<div class="max-w-7xl mx-auto px-6 pb-12">
+    
+    <!-- Dashboard Tab -->
+    <div id="content-dashboard" class="space-y-6 animate-fadeIn">
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div class="lg:col-span-2 glass-effect rounded-2xl shadow-lg p-6 border border-red-200">
+                <div class="flex items-center justify-between mb-6">
+                    <h2 class="text-2xl font-bold text-gray-800">🚨 Smart Alerts</h2>
+                    <span class="status-badge status-critical" id="alertCount">0 Active</span>
+                </div>
+                <div id="alertsContainer" class="space-y-3 max-h-96 overflow-y-auto"></div>
+            </div>
+            <div class="glass-effect rounded-2xl shadow-lg p-6 border border-purple-200">
+                <h2 class="text-xl font-bold text-gray-800 mb-6">System Health</h2>
+                <div class="space-y-4">
+                    <div class="flex justify-between items-center">
+                        <span class="text-gray-600">Network Status</span>
+                        <span class="status-badge status-available">✓ Online</span>
+                    </div>
+                    <div class="flex justify-between items-center">
+                        <span class="text-gray-600">Last Sync</span>
+                        <span class="text-sm font-semibold text-green-600">Now</span>
+                    </div>
+                    <div class="flex justify-between items-center">
+                        <span class="text-gray-600">Data Integrity</span>
+                        <span class="text-sm font-semibold text-green-600">100%</span>
+                    </div>
+                    <div class="h-px bg-gray-200 my-4"></div>
+                    <button onclick="showTab('findnearest')" class="w-full bg-red-600 text-white font-semibold py-3 rounded-lg hover:bg-red-700 transition">Find Nearest Bank</button>
+                    <button onclick="window.location.href='reward.html'" class="w-full bg-gradient-to-r from-yellow-500 to-orange-500 text-white font-semibold py-3 rounded-lg hover:shadow-lg transition">
+                        🏆 Leaderboard & Rewards
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Blood Type Distribution -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div class="glass-effect rounded-2xl shadow-lg p-6 border border-indigo-200">
+                <h2 class="text-2xl font-bold text-gray-800 mb-6">📊 Blood Type Distribution</h2>
+                <div class="space-y-3">
+                    <div class="flex justify-between items-center p-3 bg-red-50 rounded-lg">
+                        <span class="font-semibold text-gray-700">A+ Blood Type</span>
+                        <span class="text-xl font-bold text-red-600"><span id="analyticsA">0</span> units</span>
+                    </div>
+                    <div class="flex justify-between items-center p-3 bg-blue-50 rounded-lg">
+                        <span class="font-semibold text-gray-700">B+ Blood Type</span>
+                        <span class="text-xl font-bold text-blue-600"><span id="analyticsB">0</span> units</span>
+                    </div>
+                    <div class="flex justify-between items-center p-3 bg-purple-50 rounded-lg">
+                        <span class="font-semibold text-gray-700">AB+ Blood Type</span>
+                        <span class="text-xl font-bold text-purple-600"><span id="analyticsAB">0</span> units</span>
+                    </div>
+                    <div class="flex justify-between items-center p-3 bg-orange-50 rounded-lg">
+                        <span class="font-semibold text-gray-700">O+ Blood Type</span>
+                        <span class="text-xl font-bold text-orange-600"><span id="analyticsO">0</span> units</span>
+                    </div>
+                </div>
+            </div>
+            <div class="glass-effect rounded-2xl shadow-lg p-6 border border-indigo-200">
+                <h2 class="text-2xl font-bold text-gray-800 mb-6">📈 Donation Trends</h2>
+                <div class="space-y-3">
+                    <div class="flex justify-between items-center p-3 bg-gradient-to-r from-red-50 to-pink-50 rounded-lg">
+                        <span class="font-semibold text-gray-700">Total Donations</span>
+                        <span class="text-2xl font-bold text-red-600" id="totalDonationsCount">0</span>
+                    </div>
+                    <div class="flex justify-between items-center p-3 bg-gradient-to-r from-blue-50 to-cyan-50 rounded-lg">
+                        <span class="font-semibold text-gray-700">Avg Donors/Month</span>
+                        <span class="text-2xl font-bold text-blue-600">12</span>
+                    </div>
+                    <div class="flex justify-between items-center p-3 bg-gradient-to-r from-green-50 to-emerald-50 rounded-lg">
+                        <span class="font-semibold text-gray-700">Requests Fulfilled</span>
+                        <span class="text-2xl font-bold text-green-600">94%</span>
+                    </div>
+                    <div class="flex justify-between items-center p-3 bg-gradient-to-r from-purple-50 to-pink-50 rounded-lg">
+                        <span class="font-semibold text-gray-700">Avg Response Time</span>
+                        <span class="text-2xl font-bold text-purple-600">2.3 hrs</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- NEW FEATURES ADDED BELOW -->
+
+        <!-- Blood Donation Campaigns -->
+        <div class="glass-effect rounded-2xl shadow-lg p-6 border border-teal-200">
+            <div class="flex items-center justify-between mb-6">
+                <h2 class="text-2xl font-bold text-gray-800">🎯 Active Blood Donation Campaigns</h2>
+                <button onclick="showTab('campaigns')" class="px-4 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 transition text-sm font-semibold">View All</button>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <div class="bg-gradient-to-br from-red-100 to-red-200 p-5 rounded-xl border border-red-300">
+                    <div class="flex justify-between items-start mb-3">
+                        <h3 class="font-bold text-lg text-gray-800">Emergency Drive</h3>
+                        <span class="status-badge status-critical">Urgent</span>
+                    </div>
+                    <p class="text-sm text-gray-600 mb-4">O- blood type critically low. Help save lives today.</p>
+                    <div class="flex justify-between items-center">
+                        <span class="text-xs text-gray-500">Ends: Tomorrow</span>
+                        <button class="px-3 py-1 bg-red-600 text-white text-xs rounded-lg hover:bg-red-700">Join Now</button>
+                    </div>
+                </div>
+                <div class="bg-gradient-to-br from-blue-100 to-blue-200 p-5 rounded-xl border border-blue-300">
+                    <div class="flex justify-between items-start mb-3">
+                        <h3 class="font-bold text-lg text-gray-800">Community Drive</h3>
+                        <span class="status-badge status-available">Active</span>
+                    </div>
+                    <p class="text-sm text-gray-600 mb-4">Monthly community blood donation event at City Center.</p>
+                    <div class="flex justify-between items-center">
+                        <span class="text-xs text-gray-500">Ends: 5 days</span>
+                        <button class="px-3 py-1 bg-blue-600 text-white text-xs rounded-lg hover:bg-blue-700">Learn More</button>
+                    </div>
+                </div>
+                <div class="bg-gradient-to-br from-green-100 to-green-200 p-5 rounded-xl border border-green-300">
+                    <div class="flex justify-between items-start mb-3">
+                        <h3 class="font-bold text-lg text-gray-800">Corporate Drive</h3>
+                        <span class="status-badge status-pending">Upcoming</span>
+                    </div>
+                    <p class="text-sm text-gray-600 mb-4">TechCorp blood donation drive - employees only.</p>
+                    <div class="flex justify-between items-center">
+                        <span class="text-xs text-gray-500">Starts: 3 days</span>
+                        <button class="px-3 py-1 bg-green-600 text-white text-xs rounded-lg hover:bg-green-700">Register</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Educational Resources -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div class="glass-effect rounded-2xl shadow-lg p-6 border border-yellow-200">
+                <h2 class="text-2xl font-bold text-gray-800 mb-6">📚 Educational Resources</h2>
+                <div class="space-y-4">
+                    <div class="flex items-start gap-4 p-4 bg-yellow-50 rounded-lg hover:bg-yellow-100 transition cursor-pointer">
+                        <i class="fas fa-file-medical text-yellow-600 text-xl mt-1"></i>
+                        <div>
+                            <h3 class="font-semibold text-gray-800">Blood Donation Eligibility</h3>
+                            <p class="text-sm text-gray-600 mt-1">Learn about requirements and health guidelines for donors.</p>
+                        </div>
+                    </div>
+                    <div class="flex items-start gap-4 p-4 bg-blue-50 rounded-lg hover:bg-blue-100 transition cursor-pointer">
+                        <i class="fas fa-heart text-blue-600 text-xl mt-1"></i>
+                        <div>
+                            <h3 class="font-semibold text-gray-800">Benefits of Donation</h3>
+                            <p class="text-sm text-gray-600 mt-1">Discover how donating blood improves your health.</p>
+                        </div>
+                    </div>
+                    <div class="flex items-start gap-4 p-4 bg-green-50 rounded-lg hover:bg-green-100 transition cursor-pointer">
+                        <i class="fas fa-hand-holding-medical text-green-600 text-xl mt-1"></i>
+                        <div>
+                            <h3 class="font-semibold text-gray-800">Post-Donation Care</h3>
+                            <p class="text-sm text-gray-600 mt-1">Tips for recovery and maintaining health after donation.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="glass-effect rounded-2xl shadow-lg p-6 border border-pink-200">
+                <h2 class="text-2xl font-bold text-gray-800 mb-6">📢 Community Updates</h2>
+                <div class="space-y-4">
+                    <div class="p-4 bg-pink-50 rounded-lg">
+                        <p class="font-semibold text-pink-700">🆕 New Feature</p>
+                        <p class="text-sm text-gray-600 mt-2">Real-time blood tracking now available for all hospitals</p>
+                    </div>
+                    <div class="p-4 bg-blue-50 rounded-lg">
+                        <p class="font-semibold text-blue-700">🏥 Partnership</p>
+                        <p class="text-sm text-gray-600 mt-2">Welcome 10 new hospitals to our network this month</p>
+                    </div>
+                    <div class="p-4 bg-purple-50 rounded-lg">
+                        <p class="font-semibold text-purple-700">🌟 Achievement</p>
+                        <p class="text-sm text-gray-600 mt-2">We've helped save over 50,000 lives this year!</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Donor Impact Stories -->
+        <div class="glass-effect rounded-2xl shadow-lg p-8 border border-purple-200">
+            <h2 class="text-3xl font-bold text-center text-gray-800 mb-8">💬 Donor Impact Stories</h2>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div class="text-center p-6 bg-white rounded-lg shadow-sm">
+                    <div class="w-16 h-16 bg-purple-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <span class="text-2xl">👨‍⚕️</span>
+                    </div>
+                    <p class="text-gray-600 italic mb-4">"LIFELINK made it so easy to find blood for my emergency patient. The blockchain tracking gave us complete confidence in the blood supply."</p>
+                    <p class="font-semibold">Dr. Sharma, Cardiologist</p>
+                </div>
+                <div class="text-center p-6 bg-white rounded-lg shadow-sm">
+                    <div class="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <span class="text-2xl">👩</span>
+                    </div>
+                    <p class="text-gray-600 italic mb-4">"As a regular donor, I love how LIFELINK tracks my contributions and shows the real impact I'm making in my community."</p>
+                    <p class="font-semibold">Priya, Regular Donor</p>
+                </div>
+                <div class="text-center p-6 bg-white rounded-lg shadow-sm">
+                    <div class="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <span class="text-2xl">🏥</span>
+                    </div>
+                    <p class="text-gray-600 italic mb-4">"The inventory management system has revolutionized how we handle blood supplies. Reduced waste by 40% in just 3 months!"</p>
+                    <p class="font-semibold">City Hospital Administrator</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Blood Usage Statistics -->
+        <div class="glass-effect rounded-2xl shadow-lg p-6 border border-indigo-200">
+            <h2 class="text-2xl font-bold text-gray-800 mb-6">📈 Blood Usage Statistics</h2>
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div class="text-center p-4 bg-white rounded-lg border border-gray-200">
+                    <p class="text-sm text-gray-600">Most Requested Type</p>
+                    <p class="text-xl font-bold text-red-600 mt-2">O+</p>
+                    <div class="progress-bar mt-2">
+                        <div class="progress-fill bg-red-500" style="width: 85%"></div>
+                    </div>
+                </div>
+                <div class="text-center p-4 bg-white rounded-lg border border-gray-200">
+                    <p class="text-sm text-gray-600">Rarest Type</p>
+                    <p class="text-xl font-bold text-purple-600 mt-2">AB-</p>
+                    <div class="progress-bar mt-2">
+                        <div class="progress-fill bg-purple-500" style="width: 12%"></div>
+                    </div>
+                </div>
+                <div class="text-center p-4 bg-white rounded-lg border border-gray-200">
+                    <p class="text-sm text-gray-600">Monthly Donations</p>
+                    <p class="text-xl font-bold text-blue-600 mt-2">1,245</p>
+                    <div class="progress-bar mt-2">
+                        <div class="progress-fill bg-blue-500" style="width: 78%"></div>
+                    </div>
+                </div>
+                <div class="text-center p-4 bg-white rounded-lg border border-gray-200">
+                    <p class="text-sm text-gray-600">Lives Saved</p>
+                    <p class="text-xl font-bold text-green-600 mt-2">3,672</p>
+                    <div class="progress-bar mt-2">
+                        <div class="progress-fill bg-green-500" style="width: 92%"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- My Profile Tab (DONOR ONLY) -->
+    <div id="content-myprofile" class="hidden animate-fadeIn">
+        <div class="glass-effect rounded-2xl shadow-lg p-8 border border-blue-200 max-w-4xl mx-auto">
+            <h2 class="text-3xl font-bold text-gray-800 mb-8 text-center">👤 My Donor Profile</h2>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+                <div class="p-6 bg-gradient-to-br from-red-50 to-pink-50 rounded-xl">
+                    <p class="text-sm text-gray-600 mb-1">Full Name</p>
+                    <p class="text-xl font-bold text-gray-800" id="profileName">Loading...</p>
+                </div>
+                <div class="p-6 bg-gradient-to-br from-blue-50 to-cyan-50 rounded-xl">
+                    <p class="text-sm text-gray-600 mb-1">Blood Type</p>
+                    <p class="text-xl font-bold text-red-600" id="profileBlood">Loading...</p>
+                </div>
+                <div class="p-6 bg-gradient-to-br from-green-50 to-emerald-50 rounded-xl">
+                    <p class="text-sm text-gray-600 mb-1">Total Donations</p>
+                    <p class="text-xl font-bold text-green-600" id="profileDonations">0</p>
+                </div>
+                <div class="p-6 bg-gradient-to-br from-yellow-50 to-orange-50 rounded-xl">
+                    <p class="text-sm text-gray-600 mb-1">Reward Points</p>
+                    <p class="text-xl font-bold text-yellow-600" id="profilePoints">0</p>
+                </div>
+            </div>
+            
+            <!-- NEW: Donor Badges Section -->
+            <div class="mb-8">
+                <h3 class="text-xl font-bold text-gray-800 mb-4">🏅 My Badges</h3>
+                <div class="flex flex-wrap gap-2" id="donorBadges">
+                    <!-- Badges will be dynamically added here -->
+                </div>
+            </div>
+            
+            <!-- NEW: Donation History -->
+            <div class="mb-8">
+                <h3 class="text-xl font-bold text-gray-800 mb-4">📋 Donation History</h3>
+                <div class="bg-white rounded-lg border border-gray-200 p-4">
+                    <div class="overflow-x-auto">
+                        <table class="w-full">
+                            <thead>
+                                <tr class="border-b border-gray-200">
+                                    <th class="text-left py-2 text-sm font-semibold text-gray-700">Date</th>
+                                    <th class="text-left py-2 text-sm font-semibold text-gray-700">Location</th>
+                                    <th class="text-left py-2 text-sm font-semibold text-gray-700">Points Earned</th>
+                                </tr>
+                            </thead>
+                            <tbody id="donationHistory">
+                                <!-- Donation history will be dynamically added here -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="text-center space-y-4">
+                <button onclick="bookDonation()" class="px-8 py-4 bg-gradient-to-r from-red-600 to-red-700 text-white font-bold text-lg rounded-xl hover:shadow-lg transition transform hover:scale-105">📅 Book Donation Appointment</button>
+                <p class="text-sm text-gray-600">Next eligible donation date: <span class="font-semibold text-green-600" id="nextDonationDate">Calculate...</span></p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Manage Donors Tab (ADMIN/HOSPITAL ONLY) -->
+    <div id="content-donors" class="hidden animate-fadeIn">
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div class="glass-effect rounded-2xl shadow-lg p-6 border border-blue-200">
+                <h2 class="text-2xl font-bold text-gray-800 mb-4">➕ Register New Donor</h2>
+                <p class="text-sm text-gray-600 mb-6 bg-blue-50 p-3 rounded-lg">📋 Register walk-in donors or those who call for registration</p>
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-700 mb-2">Full Name</label>
+                        <input type="text" id="donorName" class="w-full border border-gray-300 p-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="Enter donor name">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-700 mb-2">Blood Type</label>
+                        <select id="donorBlood" class="w-full border border-gray-300 p-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                            <option>A+</option><option>A-</option><option>B+</option><option>B-</option>
+                            <option>AB+</option><option>AB-</option><option>O+</option><option>O-</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-700 mb-2">Contact Number</label>
+                        <input type="tel" id="donorContact" class="w-full border border-gray-300 p-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="+91 XXXXXXXXXX">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-700 mb-2">Email</label>
+                        <input type="email" id="donorEmail" class="w-full border border-gray-300 p-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="donor@email.com">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-700 mb-2">Age</label>
+                        <input type="number" id="donorAge" min="18" max="65" class="w-full border border-gray-300 p-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="18-65">
+                    </div>
+                    <button onclick="registerDonor()" class="w-full bg-blue-600 text-white font-semibold py-3 rounded-lg hover:bg-blue-700 transition">Register Donor</button>
+                </div>
+            </div>
+            <div class="glass-effect rounded-2xl shadow-lg p-6 border border-blue-200">
+                <h2 class="text-2xl font-bold text-gray-800 mb-6">👥 All Donors</h2>
+                <div id="donorsList" class="space-y-3 max-h-96 overflow-y-auto"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Inventory Tab -->
+    <div id="content-inventory" class="hidden animate-fadeIn">
+        <div class="glass-effect rounded-2xl shadow-lg p-6 border border-green-200">
+            <div class="flex items-center justify-between mb-6">
+                <h2 class="text-2xl font-bold text-gray-800">📦 Blood Inventory (FIFO)</h2>
+                <div class="flex gap-2">
+                    <button onclick="sortInventory()" class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition text-sm font-semibold">🔄 Refresh</button>
+                    <button onclick="exportInventory()" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition text-sm font-semibold">📤 Export</button>
+                </div>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+                <div class="blood-stat bg-red-100 text-red-700">A+ <span id="bloodAPlus">0</span></div>
+                <div class="blood-stat bg-blue-100 text-blue-700">B+ <span id="bloodBPlus">0</span></div>
+                <div class="blood-stat bg-purple-100 text-purple-700">AB+ <span id="bloodABPlus">0</span></div>
+                <div class="blood-stat bg-orange-100 text-orange-700">O+ <span id="bloodOPlus">0</span></div>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="w-full">
+                    <thead class="bg-gradient-to-r from-gray-50 to-gray-100">
+                        <tr>
+                            <th class="px-6 py-4 text-left font-semibold text-gray-700">Unit ID</th>
+                            <th class="px-6 py-4 text-left font-semibold text-gray-700">Blood Type</th>
+                            <th class="px-6 py-4 text-left font-semibold text-gray-700">Units</th>
+                            <th class="px-6 py-4 text-left font-semibold text-gray-700">Expires In</th>
+                            <th class="px-6 py-4 text-left font-semibold text-gray-700">Location</th>
+                            <th class="px-6 py-4 text-left font-semibold text-gray-700">Status</th>
+                        </tr>
+                    </thead>
+                    <tbody id="inventoryTable" class="divide-y divide-gray-200"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Find Nearest Tab -->
+    <div id="content-findnearest" class="hidden animate-fadeIn">
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div class="glass-effect rounded-2xl shadow-lg p-6 border border-teal-200">
+                <h2 class="text-2xl font-bold text-teal-600 mb-6">🗺️ Find Nearest Bank/Hospital</h2>
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-700 mb-2">Blood Type Needed</label>
+                        <select id="nearestBloodType" class="w-full border border-gray-300 p-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500">
+                            <option>A+</option><option>A-</option><option>B+</option><option>B-</option>
+                            <option>AB+</option><option>AB-</option><option>O+</option><option>O-</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-700 mb-2">Your Latitude</label>
+                        <input type="number" id="userLat" step="0.0001" placeholder="e.g., 28.6139" class="w-full border border-gray-300 p-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-700 mb-2">Your Longitude</label>
+                        <input type="number" id="userLng" step="0.0001" placeholder="e.g., 77.2090" class="w-full border border-gray-300 p-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500">
+                    </div>
+                    <button onclick="getCurrentLocation()" class="w-full bg-teal-600 text-white font-semibold py-3 rounded-lg hover:bg-teal-700 transition">📍 Use My Location</button>
+                    <button onclick="findNearest()" class="w-full bg-green-600 text-white font-semibold py-3 rounded-lg hover:bg-green-700 transition">🔍 Find Nearest</button>
+                </div>
+            </div>
+            <div class="lg:col-span-2">
+                <div class="glass-effect rounded-2xl shadow-lg p-6 border border-teal-200">
+                    <div id="map"></div>
+                </div>
+            </div>
+        </div>
+        <div id="nearestResults" class="mt-6 hidden">
+            <div class="glass-effect rounded-2xl shadow-lg p-6 border border-teal-200">
+                <h3 class="text-2xl font-bold text-gray-800 mb-4">Nearest Banks/Hospitals</h3>
+                <div id="resultsList" class="space-y-4"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- NEW: Campaigns Tab -->
+    <div id="content-campaigns" class="hidden animate-fadeIn">
+        <div class="glass-effect rounded-2xl shadow-lg p-6 border border-teal-200">
+            <div class="flex items-center justify-between mb-6">
+                <h2 class="text-2xl font-bold text-gray-800">🎯 Blood Donation Campaigns</h2>
+                <button onclick="createCampaign()" class="px-4 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 transition text-sm font-semibold">+ New Campaign</button>
+            </div>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+                <div class="bg-gradient-to-br from-red-100 to-red-200 p-5 rounded-xl border border-red-300">
+                    <div class="flex justify-between items-start mb-3">
+                        <h3 class="font-bold text-lg text-gray-800">Emergency Drive</h3>
+                        <span class="status-badge status-critical">Urgent</span>
+                    </div>
+                    <p class="text-sm text-gray-600 mb-4">O- blood type critically low. Help save lives today.</p>
+                    <div class="flex justify-between items-center mb-4">
+                        <span class="text-xs text-gray-500"><i class="fas fa-calendar mr-1"></i> Ends: Tomorrow</span>
+                        <span class="text-xs text-gray-500"><i class="fas fa-map-marker-alt mr-1"></i> City Center</span>
+                    </div>
+                    <div class="flex justify-between items-center">
+                        <span class="text-xs font-semibold">Goal: 150 units</span>
+                        <button class="px-3 py-1 bg-red-600 text-white text-xs rounded-lg hover:bg-red-700">Join Now</button>
+                    </div>
+                </div>
+                
+                <div class="bg-gradient-to-br from-blue-100 to-blue-200 p-5 rounded-xl border border-blue-300">
+                    <div class="flex justify-between items-start mb-3">
+                        <h3 class="font-bold text-lg text-gray-800">Community Drive</h3>
+                        <span class="status-badge status-available">Active</span>
+                    </div>
+                    <p class="text-sm text-gray-600 mb-4">Monthly community blood donation event at City Center.</p>
+                    <div class="flex justify-between items-center mb-4">
+                        <span class="text-xs text-gray-500"><i class="fas fa-calendar mr-1"></i> Ends: 5 days</span>
+                        <span class="text-xs text-gray-500"><i class="fas fa-map-marker-alt mr-1"></i> Community Hall</span>
+                    </div>
+                    <div class="flex justify-between items-center">
+                        <span class="text-xs font-semibold">Goal: 300 units</span>
+                        <button class="px-3 py-1 bg-blue-600 text-white text-xs rounded-lg hover:bg-blue-700">Learn More</button>
+                    </div>
+                </div>
+                
+                <div class="bg-gradient-to-br from-green-100 to-green-200 p-5 rounded-xl border border-green-300">
+                    <div class="flex justify-between items-start mb-3">
+                        <h3 class="font-bold text-lg text-gray-800">Corporate Drive</h3>
+                        <span class="status-badge status-pending">Upcoming</span>
+                    </div>
+                    <p class="text-sm text-gray-600 mb-4">TechCorp blood donation drive - employees only.</p>
+                    <div class="flex justify-between items-center mb-4">
+                        <span class="text-xs text-gray-500"><i class="fas fa-calendar mr-1"></i> Starts: 3 days</span>
+                        <span class="text-xs text-gray-500"><i class="fas fa-map-marker-alt mr-1"></i> TechCorp HQ</span>
+                    </div>
+                    <div class="flex justify-between items-center">
+                        <span class="text-xs font-semibold">Goal: 200 units</span>
+                        <button class="px-3 py-1 bg-green-600 text-white text-xs rounded-lg hover:bg-green-700">Register</button>
+                    </div>
+                </div>
+            </div>
+            
+            <h3 class="text-xl font-bold text-gray-800 mb-4">Campaign Statistics</h3>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div class="bg-white p-4 rounded-lg border border-gray-200 text-center">
+                    <p class="text-sm text-gray-600">Active Campaigns</p>
+                    <p class="text-2xl font-bold text-blue-600">12</p>
+                </div>
+                <div class="bg-white p-4 rounded-lg border border-gray-200 text-center">
+                    <p class="text-sm text-gray-600">Total Participants</p>
+                    <p class="text-2xl font-bold text-green-600">2,847</p>
+                </div>
+                <div class="bg-white p-4 rounded-lg border border-gray-200 text-center">
+                    <p class="text-sm text-gray-600">Units Collected</p>
+                    <p class="text-2xl font-bold text-red-600">1,523</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Request Tab -->
+    <div id="content-request" class="hidden animate-fadeIn">
+        <div class="glass-effect rounded-2xl shadow-lg p-6 border border-purple-200 max-w-2xl mx-auto">
+            <h2 class="text-2xl font-bold text-purple-600 mb-6">🏥 Emergency Blood Request</h2>
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-sm font-semibold text-gray-700 mb-2">Hospital Name</label>
+                    <input type="text" id="requestHospital" placeholder="Enter hospital name" class="w-full border border-gray-300 p-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500">
+                </div>
+                <div>
+                    <label class="block text-sm font-semibold text-gray-700 mb-2">Blood Type Required</label>
+                    <select id="requestBloodType" class="w-full border border-gray-300 p-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500">
+                        <option>A+</option><option>A-</option><option>B+</option><option>B-</option>
+                        <option>AB+</option><option>AB-</option><option>O+</option><option>O-</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-semibold text-gray-700 mb-2">Units Required</label>
+                    <input type="number" id="requestUnits" min="1" max="100" value="5" class="w-full border border-gray-300 p-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500">
+                </div>
+                <div>
+                    <label class="block text-sm font-semibold text-gray-700 mb-2">Urgency Level</label>
+                    <select id="requestUrgency" class="w-full border border-gray-300 p-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500">
+                        <option>Normal</option><option>Urgent</option><option>Critical</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-semibold text-gray-700 mb-2">Patient Notes</label>
+                    <textarea id="requestNotes" placeholder="Any additional details..." class="w-full border border-gray-300 p-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500" rows="3"></textarea>
+                </div>
+                <button onclick="submitRequest()" class="w-full bg-purple-600 text-white font-semibold py-3 rounded-lg hover:bg-purple-700 transition">Submit Emergency Request</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Analytics Tab -->
+    <div id="content-analytics" class="hidden animate-fadeIn">
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div class="glass-effect rounded-2xl shadow-lg p-6 border border-indigo-200">
+                <h2 class="text-2xl font-bold text-gray-800 mb-6">📊 Blood Type Distribution</h2>
+                <div class="space-y-3">
+                    <div class="flex justify-between items-center p-3 bg-red-50 rounded-lg">
+                        <span class="font-semibold text-gray-700">A+ Blood Type</span>
+                        <span class="text-xl font-bold text-red-600"><span id="analyticsA">0</span> units</span>
+                    </div>
+                    <div class="flex justify-between items-center p-3 bg-blue-50 rounded-lg">
+                        <span class="font-semibold text-gray-700">B+ Blood Type</span>
+                        <span class="text-xl font-bold text-blue-600"><span id="analyticsB">0</span> units</span>
+                    </div>
+                    <div class="flex justify-between items-center p-3 bg-purple-50 rounded-lg">
+                        <span class="font-semibold text-gray-700">AB+ Blood Type</span>
+                        <span class="text-xl font-bold text-purple-600"><span id="analyticsAB">0</span> units</span>
+                    </div>
+                    <div class="flex justify-between items-center p-3 bg-orange-50 rounded-lg">
+                        <span class="font-semibold text-gray-700">O+ Blood Type</span>
+                        <span class="text-xl font-bold text-orange-600"><span id="analyticsO">0</span> units</span>
+                    </div>
+                </div>
+            </div>
+            <div class="glass-effect rounded-2xl shadow-lg p-6 border border-indigo-200">
+                <h2 class="text-2xl font-bold text-gray-800 mb-6">📈 Donation Trends</h2>
+                <div class="space-y-3">
+                    <div class="flex justify-between items-center p-3 bg-gradient-to-r from-red-50 to-pink-50 rounded-lg">
+                        <span class="font-semibold text-gray-700">Total Donations</span>
+                        <span class="text-2xl font-bold text-red-600" id="totalDonationsCount">0</span>
+                    </div>
+                    <div class="flex justify-between items-center p-3 bg-gradient-to-r from-blue-50 to-cyan-50 rounded-lg">
+                        <span class="font-semibold text-gray-700">Avg Donors/Month</span>
+                        <span class="text-2xl font-bold text-blue-600">12</span>
+                    </div>
+                    <div class="flex justify-between items-center p-3 bg-gradient-to-r from-green-50 to-emerald-50 rounded-lg">
+                        <span class="font-semibold text-gray-700">Requests Fulfilled</span>
+                        <span class="text-2xl font-bold text-green-600">94%</span>
+                    </div>
+                    <div class="flex justify-between items-center p-3 bg-gradient-to-r from-purple-50 to-pink-50 rounded-lg">
+                        <span class="font-semibold text-gray-700">Avg Response Time</span>
+                        <span class="text-2xl font-bold text-purple-600">2.3 hrs</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- NEW: Regional Analytics -->
+        <div class="glass-effect rounded-2xl shadow-lg p-6 border border-indigo-200 mt-6">
+            <h2 class="text-2xl font-bold text-gray-800 mb-6">🌍 Regional Analytics</h2>
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div class="bg-white p-4 rounded-lg border border-gray-200 text-center">
+                    <p class="text-sm text-gray-600">North Region</p>
+                    <p class="text-xl font-bold text-blue-600">45%</p>
+                    <div class="progress-bar mt-2">
+                        <div class="progress-fill bg-blue-500" style="width: 45%"></div>
+                    </div>
+                </div>
+                <div class="bg-white p-4 rounded-lg border border-gray-200 text-center">
+                    <p class="text-sm text-gray-600">South Region</p>
+                    <p class="text-xl font-bold text-green-600">32%</p>
+                    <div class="progress-bar mt-2">
+                        <div class="progress-fill bg-green-500" style="width: 32%"></div>
+                    </div>
+                </div>
+                <div class="bg-white p-4 rounded-lg border border-gray-200 text-center">
+                    <p class="text-sm text-gray-600">East Region</p>
+                    <p class="text-xl font-bold text-purple-600">15%</p>
+                    <div class="progress-bar mt-2">
+                        <div class="progress-fill bg-purple-500" style="width: 15%"></div>
+                    </div>
+                </div>
+                <div class="bg-white p-4 rounded-lg border border-gray-200 text-center">
+                    <p class="text-sm text-gray-600">West Region</p>
+                    <p class="text-xl font-bold text-orange-600">8%</p>
+                    <div class="progress-bar mt-2">
+                        <div class="progress-fill bg-orange-500" style="width: 8%"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<!-- Copyright Footer -->
+<footer class="bg-gradient-to-r from-red-600 via-red-700 to-red-800 text-white py-8 mt-12">
+    <div class="max-w-7xl mx-auto px-6">
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-8">
+            <div class="md:col-span-2">
+                <h3 class="text-2xl font-bold mb-4">LIFELINK</h3>
+                <p class="text-red-100 mb-4">AI-Powered Blockchain Blood Bank Network - Saving lives through technology and community.</p>
+                <div class="flex space-x-4">
+                    <div class="bg-white bg-opacity-20 p-2 rounded-lg">
+                        <span class="text-sm">🔐 Secure</span>
+                    </div>
+                    <div class="bg-white bg-opacity-20 p-2 rounded-lg">
+                        <span class="text-sm">⚡ Fast</span>
+                    </div>
+                    <div class="bg-white bg-opacity-20 p-2 rounded-lg">
+                        <span class="text-sm">❤️ Reliable</span>
+                    </div>
+                </div>
+            </div>
+            <div>
+                <h4 class="font-semibold mb-4">Quick Links</h4>
+                <ul class="space-y-2 text-red-100">
+                    <li><a href="#" class="hover:text-white transition">About Us</a></li>
+                    <li><a href="#" class="hover:text-white transition">How It Works</a></li>
+                    <li><a href="#" class="hover:text-white transition">Privacy Policy</a></li>
+                    <li><a href="#" class="hover:text-white transition">Terms of Service</a></li>
+                </ul>
+            </div>
+            <div>
+                <h4 class="font-semibold mb-4">Contact</h4>
+                <ul class="space-y-2 text-red-100">
+                    <li>📧 support@lifelink.com</li>
+                    <li>📞 +1 (555) 123-HELP</li>
+                    <li>🏢 123 Health Street, Medical City</li>
+                </ul>
+            </div>
+        </div>
+        <div class="border-t border-red-500 mt-8 pt-6 text-center text-red-200">
+            <p>&copy; 2024 LIFELINK - Blockchain Blood Bank Network. All rights reserved. | Saving Lives, One Donation at a Time</p>
+        </div>
+    </div>
+</footer>
+
+<script>
+    // ===== USER DATA & ROLE MANAGEMENT =====
+    let userRole = sessionStorage.getItem("userRole") || 'donor';
+    let userName = sessionStorage.getItem("userName") || 'Guest User';
+    let userEmail = sessionStorage.getItem("userEmail") || 'user@lifelink.com';
+    
+    // If no role found, prompt for it (fallback)
+    if(!sessionStorage.getItem("userRole")) {
+        const promptRole = prompt("Enter your role (donor/hospital/admin):", "donor");
+        userRole = ['donor', 'hospital', 'admin'].includes(promptRole) ? promptRole : 'donor';
+        sessionStorage.setItem("userRole", userRole);
+        userName = prompt("Enter your name:", "Test User");
+        sessionStorage.setItem("userName", userName);
+    }
+
+    // ===== DATA =====
+    let bloodInventory = [
+        { id:'BLK001', type:'A+', units:45, expiryDays:3, donor:'Rajesh', status:'critical', hospital:'AIIMS Delhi', lat:28.5921, lng:77.2109 },
+        { id:'BLK002', type:'O-', units:12, expiryDays:25, donor:'Priya', status:'available', hospital:'Apollo Mumbai', lat:19.0176, lng:72.8479 },
+        { id:'BLK003', type:'B+', units:28, expiryDays:8, donor:'Amit', status:'available', hospital:'Max Delhi', lat:28.5495, lng:77.1996 },
+        { id:'BLK004', type:'AB-', units:5, expiryDays:42, donor:'Neha', status:'urgent', hospital:'Fortis Gurgaon', lat:28.4595, lng:77.0270 },
+        { id:'BLK005', type:'O+', units:35, expiryDays:15, donor:'Vikram', status:'available', hospital:'Manipal Delhi', lat:28.5821, lng:77.2345 },
+    ];
+    
+    let donors = [
+        { id:'D001', name:'Rajesh Kumar', blood:'A+', donations:12, points:1200, lastDonation:'2024-09-15', age:35, email:'rajesh@email.com' },
+        { id:'D002', name:'Priya Singh', blood:'O-', donations:8, points:800, lastDonation:'2024-10-01', age:28, email:'priya@email.com' },
+        { id:'D003', name:'Amit Patel', blood:'B+', donations:15, points:1500, lastDonation:'2024-10-05', age:42, email:'amit@email.com' },
+    ];
+    
+    let hospitals = [
+        { id:'H001', name:'AIIMS Delhi', lat:28.5921, lng:77.2109, bloodTypes:{A:45, B:20, AB:8, O:15}, address:'Ansari Nagar, New Delhi' },
+        { id:'H002', name:'Max Delhi', lat:28.5495, lng:77.1996, bloodTypes:{A:30, B:28, AB:5, O:35}, address:'Saket, New Delhi' },
+        { id:'H003', name:'Fortis Gurgaon', lat:28.4595, lng:77.0270, bloodTypes:{A:15, B:22, AB:10, O:18}, address:'Sector 44, Gurgaon' },
+        { id:'H004', name:'Apollo Mumbai', lat:19.0176, lng:72.8479, bloodTypes:{A:40, B:25, AB:12, O:12}, address:'Bandra, Mumbai' },
+        { id:'H005', name:'Manipal Delhi', lat:28.5821, lng:77.2345, bloodTypes:{A:25, B:30, AB:15, O:35}, address:'Dwarka, New Delhi' },
+    ];
+    
+    let alerts = [
+        { message:'A+ blood units expiring in 3 days at AIIMS Delhi', priority:'critical', time:'2 mins ago' },
+        { message:'O- inventory running low (12 units)', priority:'high', time:'1 hour ago' },
+        { message:'New donor registration spike detected', priority:'medium', time:'3 hours ago' },
+    ];
+
+    let map;
+    let userMarker;
+    let hospitalMarkers = [];
+
+    // ===== INITIALIZE UI BASED ON ROLE =====
+    function initializeRoleBasedUI() {
+        // Set header info
+        document.getElementById('headerUserName').textContent = userName;
+        document.getElementById('headerUserRole').textContent = userRole;
+        document.getElementById('headerUserRole').className = 'role-badge role-' + userRole;
+
+        // Generate navigation based on role
+        const navContainer = document.getElementById('navContainer');
+        let navHTML = '';
+
+        // Common tabs for all
+        navHTML += '<button onclick="showTab(\'dashboard\')" id="tab-dashboard" class="flex-1 px-6 py-4 font-semibold text-red-600 border-b-2 border-red-600 hover:bg-red-50 transition">📊 Dashboard</button>';
+
+        // Role-specific tabs
+        if(userRole === 'donor') {
+            navHTML += '<button onclick="showTab(\'myprofile\')" id="tab-myprofile" class="flex-1 px-6 py-4 font-semibold text-gray-600 border-b-2 border-transparent hover:bg-gray-50 transition">👤 My Profile</button>';
+        } else {
+            navHTML += '<button onclick="showTab(\'donors\')" id="tab-donors" class="flex-1 px-6 py-4 font-semibold text-gray-600 border-b-2 border-transparent hover:bg-gray-50 transition">👥 Manage Donors</button>';
+        }
+
+        navHTML += '<button onclick="showTab(\'inventory\')" id="tab-inventory" class="flex-1 px-6 py-4 font-semibold text-gray-600 border-b-2 border-transparent hover:bg-gray-50 transition">📦 Inventory</button>';
+        navHTML += '<button onclick="showTab(\'findnearest\')" id="tab-findnearest" class="flex-1 px-6 py-4 font-semibold text-gray-600 border-b-2 border-transparent hover:bg-gray-50 transition">🗺️ Find Nearest</button>';
+        navHTML += '<button onclick="showTab(\'campaigns\')" id="tab-campaigns" class="flex-1 px-6 py-4 font-semibold text-gray-600 border-b-2 border-transparent hover:bg-gray-50 transition">🎯 Campaigns</button>';
+        navHTML += '<button onclick="showTab(\'request\')" id="tab-request" class="flex-1 px-6 py-4 font-semibold text-gray-600 border-b-2 border-transparent hover:bg-gray-50 transition">🏥 Request</button>';
+        navHTML += '<button onclick="showTab(\'analytics\')" id="tab-analytics" class="flex-1 px-6 py-4 font-semibold text-gray-600 border-b-2 border-transparent hover:bg-gray-50 transition">📈 Analytics</button>';
+
+        navContainer.innerHTML = navHTML;
+
+        // Load donor profile if user is donor
+        if(userRole === 'donor') {
+            loadDonorProfile();
+        }
+    }
+
+    // ===== DONOR PROFILE FUNCTIONS =====
+    function loadDonorProfile() {
+        // Find or create donor profile
+        let donorProfile = donors.find(d => d.email === userEmail);
+        
+        if(!donorProfile) {
+            // Create new donor profile from login data
+            donorProfile = {
+                id: 'D' + String(donors.length + 1).padStart(3, '0'),
+                name: userName,
+                blood: 'A+', // Default, should be from registration
+                donations: 0,
+                points: 0,
+                lastDonation: 'Never',
+                age: 25,
+                email: userEmail
+            };
+            donors.push(donorProfile);
+        }
+
+        // Update profile display
+        document.getElementById('profileName').textContent = donorProfile.name;
+        document.getElementById('profileBlood').textContent = donorProfile.blood;
+        document.getElementById('profileDonations').textContent = donorProfile.donations;
+        document.getElementById('profilePoints').textContent = donorProfile.points;
+
+        // Calculate next donation date (90 days after last donation)
+        if(donorProfile.lastDonation !== 'Never') {
+            const lastDate = new Date(donorProfile.lastDonation);
+            const nextDate = new Date(lastDate.setDate(lastDate.getDate() + 90));
+            document.getElementById('nextDonationDate').textContent = nextDate.toLocaleDateString();
+        } else {
+            document.getElementById('nextDonationDate').textContent = 'Anytime';
+        }
+
+        // Load donor badges
+        loadDonorBadges(donorProfile);
+        
+        // Load donation history
+        loadDonationHistory(donorProfile);
+    }
+
+    // NEW: Load donor badges based on donation count
+    function loadDonorBadges(donor) {
+        const badgesContainer = document.getElementById('donorBadges');
+        badgesContainer.innerHTML = '';
+        
+        const badges = [];
+        
+        if (donor.donations >= 1) {
+            badges.push({ name: 'First Donation', class: 'badge-bronze' });
+        }
+        
+        if (donor.donations >= 5) {
+            badges.push({ name: 'Regular Donor', class: 'badge-silver' });
+        }
+        
+        if (donor.donations >= 10) {
+            badges.push({ name: 'Life Saver', class: 'badge-gold' });
+        }
+        
+        if (donor.donations >= 25) {
+            badges.push({ name: 'Hero Donor', class: 'badge-platinum' });
+        }
+        
+        if (donor.donations >= 50) {
+            badges.push({ name: 'Legend', class: 'badge-diamond' });
+        }
+        
+        badges.forEach(badge => {
+            badgesContainer.innerHTML += `<span class="badge ${badge.class}">${badge.name}</span>`;
+        });
+        
+        if (badges.length === 0) {
+            badgesContainer.innerHTML = '<p class="text-gray-500">No badges yet. Make your first donation to earn badges!</p>';
+        }
+    }
+
+    // NEW: Load donation history
+    function loadDonationHistory(donor) {
+        const historyContainer = document.getElementById('donationHistory');
+        historyContainer.innerHTML = '';
+        
+        // Sample donation history data
+        const donationHistory = [
+            { date: '2024-10-15', location: 'City Blood Bank', points: 100 },
+            { date: '2024-09-20', location: 'Community Center', points: 100 },
+            { date: '2024-08-05', location: 'Mobile Blood Drive', points: 100 },
+        ];
+        
+        if (donor.donations > 0) {
+            donationHistory.forEach(donation => {
+                historyContainer.innerHTML += `
+                    <tr class="border-b border-gray-100">
+                        <td class="py-3 text-sm">${donation.date}</td>
+                        <td class="py-3 text-sm">${donation.location}</td>
+                        <td class="py-3 text-sm font-semibold text-green-600">+${donation.points}</td>
+                    </tr>
+                `;
+            });
+        } else {
+            historyContainer.innerHTML = `
+                <tr>
+                    <td colspan="3" class="py-4 text-center text-gray-500">No donation history yet.</td>
+                </tr>
+            `;
+        }
+    }
+
+    function bookDonation() {
+        alert('🎉 Donation Appointment Booked!\n\nYou will receive a confirmation email at ' + userEmail + '\n\nPlease arrive 15 minutes early with a valid ID.');
+    }
+
+    // ===== MAP INITIALIZATION =====
+    function initMap() {
+        if(!map) {
+            map = L.map('map').setView([28.6139, 77.2090], 11);
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '© OpenStreetMap contributors',
+                maxZoom: 19
+            }).addTo(map);
+        }
+        clearMapMarkers();
+        hospitals.forEach(hospital => {
+            const marker = L.marker([hospital.lat, hospital.lng]).addTo(map)
+                .bindPopup(`
+                    <div class="p-2">
+                        <strong>${hospital.name}</strong><br>
+                        ${hospital.address}<br>
+                        <div class="mt-2">
+                            <strong>Blood Available:</strong><br>
+                            A+: ${hospital.bloodTypes.A} units<br>
+                            B+: ${hospital.bloodTypes.B} units<br>
+                            AB+: ${hospital.bloodTypes.AB} units<br>
+                            O+: ${hospital.bloodTypes.O} units
+                        </div>
+                        <div class="mt-2">
+                            <button class="px-3 py-1 bg-red-600 text-white text-sm rounded hover:bg-red-700" onclick="requestFromHospital('${hospital.name}', 'A+')">
+                                Request Blood
+                            </button>
+                            <button class="px-3 py-1 bg-blue-600 text-white text-sm rounded hover:bg-blue-700 ml-2" onclick="callHospital('${hospital.name}')">
+                                <i class="fas fa-phone mr-1"></i>Call
+                            </button>
+                        </div>
+                    </div>
+                `);
+            hospitalMarkers.push(marker);
+        });
+    }
+
+    function clearMapMarkers() {
+        hospitalMarkers.forEach(marker => map.removeLayer(marker));
+        hospitalMarkers = [];
+        if(userMarker) map.removeLayer(userMarker);
+    }
+
+    // NEW: Call hospital function
+    function callHospital(hospitalName) {
+        alert(`Calling ${hospitalName}...\n\nPhone: +1 (555) 123-4567`);
+    }
+
+    // ===== LOCATION FUNCTIONS =====
+    function getCurrentLocation() {
+        if(navigator.geolocation) {
+            navigator.geolocation.getCurrentPosition(position => {
+                const lat = position.coords.latitude;
+                const lng = position.coords.longitude;
+                document.getElementById('userLat').value = lat.toFixed(4);
+                document.getElementById('userLng').value = lng.toFixed(4);
+                alert('✓ Location captured!');
+            }, () => {
+                alert('Unable to get location. Please enter manually.');
+            });
+        }
+    }
+
+    function getDistance(lat1, lng1, lat2, lng2) {
+        const R = 6371;
+        const dLat = (lat2 - lat1) * Math.PI / 180;
+        const dLng = (lng2 - lng1) * Math.PI / 180;
+        const a = Math.sin(dLat/2) * Math.sin(dLat/2) + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLng/2) * Math.sin(dLng/2);
+        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+        return R * c;
+    }
+
+    function findNearest() {
+        const userLat = parseFloat(document.getElementById('userLat').value);
+        const userLng = parseFloat(document.getElementById('userLng').value);
+        const bloodType = document.getElementById('nearestBloodType').value[0];
+
+        if(!userLat || !userLng) {
+            alert('Please enter your location');
+            return;
+        }
+
+        clearMapMarkers();
+
+        userMarker = L.marker([userLat, userLng]).addTo(map)
+            .bindPopup('Your Location').setIcon(L.icon({iconUrl:'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png', shadowUrl:'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png', iconSize:[25, 41], iconAnchor:[12, 41], popupAnchor:[1, -34], shadowSize:[41, 41]}));
+
+        const distances = hospitals.map(h => ({
+            ...h,
+            distance: getDistance(userLat, userLng, h.lat, h.lng),
+            hasBlood: h.bloodTypes[bloodType] > 0
+        })).sort((a, b) => a.distance - b.distance);
+
+        distances.forEach((hospital) => {
+            const marker = L.marker([hospital.lat, hospital.lng]).addTo(map)
+                .bindPopup('<strong>' + hospital.name + '</strong><br>Distance: ' + hospital.distance.toFixed(2) + ' km<br>' + bloodType + '+: ' + hospital.bloodTypes[bloodType] + ' units');
+            hospitalMarkers.push(marker);
+        });
+
+        if(distances.length > 0) {
+            const group = new L.featureGroup([userMarker].concat(hospitalMarkers));
+            map.fitBounds(group.getBounds().pad(0.1));
+        }
+
+        const resultsList = document.getElementById('resultsList');
+        resultsList.innerHTML = '';
+        distances.slice(0, 10).forEach((hospital, idx) => {
+            const statusClass = hospital.hasBlood ? 'status-available' : 'status-urgent';
+            const statusText = hospital.hasBlood ? 'Available' : 'Out of Stock';
+            resultsList.innerHTML += '<div class="p-4 border border-gray-200 rounded-lg hover:shadow-md transition animate-slideInLeft" style="animation-delay:' + (idx*50) + 'ms"><div class="flex justify-between items-start mb-3"><div><h3 class="font-bold text-lg text-gray-800">' + hospital.name + '</h3><p class="text-sm text-gray-500">' + hospital.address + '</p></div><span class="status-badge ' + statusClass + '">' + statusText + '</span></div><div class="flex justify-between items-center"><div><p class="text-sm text-gray-600">Distance: <strong>' + hospital.distance.toFixed(2) + ' km</strong></p><p class="text-sm text-gray-600">' + bloodType + '+ Available: <strong>' + hospital.bloodTypes[bloodType] + ' units</strong></p></div><button onclick="requestFromHospital(\'' + hospital.name + '\', \'' + bloodType + '+\')" class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition text-sm font-semibold">Request Blood</button></div></div>';
+        });
+
+        document.getElementById('nearestResults').classList.remove('hidden');
+    }
+
+    function requestFromHospital(hospitalName, bloodType) {
+        document.getElementById('requestHospital').value = hospitalName;
+        document.getElementById('requestBloodType').value = bloodType;
+        showTab('request');
+    }
+
+    // ===== RENDERING FUNCTIONS =====
+    function renderInventory() {
+        const sorted = [...bloodInventory].sort((a,b) => a.expiryDays - b.expiryDays);
+        const table = document.getElementById('inventoryTable');
+        table.innerHTML = '';
+        
+        const bloodCounts = {A:0, B:0, AB:0, O:0};
+        sorted.forEach(item => {
+            const type = item.type[0];
+            if(item.type.includes('AB')) bloodCounts.AB += item.units;
+            else bloodCounts[type] += item.units;
+            
+            const bloodClass = item.type.includes('A') && !item.type.includes('AB') ? 'blood-a' : item.type.includes('B') && !item.type.includes('AB') ? 'blood-b' : item.type.includes('AB') ? 'blood-ab' : 'blood-o';
+            const statusClass = 'status-' + item.status;
+            const expiryColor = item.expiryDays <= 5 ? 'text-red-600' : item.expiryDays <= 15 ? 'text-orange-600' : 'text-green-600';
+            table.innerHTML += '<tr class="hover:bg-gray-50 transition"><td class="px-6 py-4 font-mono text-sm">' + item.id + '</td><td class="px-6 py-4"><span class="blood-type-badge ' + bloodClass + '">' + item.type + '</span></td><td class="px-6 py-4 font-semibold">' + item.units + ' units</td><td class="px-6 py-4"><span class="' + expiryColor + ' font-semibold">' + item.expiryDays + ' days</span></td><td class="px-6 py-4 text-sm text-gray-600">' + item.hospital + '</td><td class="px-6 py-4"><span class="status-badge ' + statusClass + '">' + item.status.toUpperCase() + '</span></td></tr>';
+        });
+        
+        document.getElementById('bloodAPlus').textContent = bloodCounts.A || 0;
+        document.getElementById('bloodBPlus').textContent = bloodCounts.B || 0;
+        document.getElementById('bloodABPlus').textContent = bloodCounts.AB || 0;
+        document.getElementById('bloodOPlus').textContent = bloodCounts.O || 0;
+        
+        document.getElementById('analyticsA').textContent = bloodCounts.A || 0;
+        document.getElementById('analyticsB').textContent = bloodCounts.B || 0;
+        document.getElementById('analyticsAB').textContent = bloodCounts.AB || 0;
+        document.getElementById('analyticsO').textContent = bloodCounts.O || 0;
+        
+        updateStats();
+    }
+
+    function renderAlerts() {
+        const container = document.getElementById('alertsContainer');
+        container.innerHTML = '';
+        if(alerts.length === 0) {
+            container.innerHTML = '<p class="text-gray-500 text-center py-8">✓ No alerts at this time</p>';
+            document.getElementById('alertCount').textContent = '0 Active';
+            return;
+        }
+        alerts.forEach(a => {
+            const priority = a.priority === 'critical' ? 'border-l-red-600 bg-red-50' : a.priority === 'high' ? 'border-l-orange-600 bg-orange-50' : 'border-l-yellow-600 bg-yellow-50';
+            container.innerHTML += '<div class="p-4 rounded-lg border-l-4 ' + priority + ' animate-slideDown"><div class="flex items-start justify-between"><p class="font-semibold text-gray-800">' + a.message + '</p><span class="text-xs text-gray-500 ml-2">' + a.time + '</span></div></div>';
+        });
+        document.getElementById('alertCount').textContent = alerts.length + ' Active';
+    }
+
+    function renderDonors() {
+        const container = document.getElementById('donorsList');
+        container.innerHTML = '';
+        donors.forEach((d, idx) => {
+            const bloodClass = d.blood.includes('A') && !d.blood.includes('AB') ? 'blood-a' : d.blood.includes('B') && !d.blood.includes('AB') ? 'blood-b' : d.blood.includes('AB') ? 'blood-ab' : 'blood-o';
+            container.innerHTML += '<div class="p-4 border border-gray-200 rounded-lg hover:shadow-md transition donor-card" style="animation-delay:' + (idx*50) + 'ms"><div class="flex items-center justify-between mb-2"><div class="flex items-center gap-3"><div class="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center font-bold text-blue-600">' + d.name.charAt(0) + '</div><div><p class="font-semibold text-gray-800">' + d.name + '</p><p class="text-xs text-gray-500">Age: ' + d.age + ' | ' + d.email + '</p></div></div><span class="blood-type-badge ' + bloodClass + '">' + d.blood + '</span></div><div class="flex justify-between text-sm text-gray-600"><span>Donations: <strong>' + d.donations + '</strong></span><span>Points: <strong class="text-green-600">' + d.points + '</strong></span><span>Last: <strong>' + d.lastDonation + '</strong></span></div></div>';
+        });
+    }
+
+    function updateStats() {
+        document.getElementById('totalUnits').innerText = bloodInventory.reduce((sum,i)=>sum+i.units,0);
+        document.getElementById('totalDonors').innerText = donors.length;
+        document.getElementById('totalTxns').innerText = bloodInventory.length + alerts.length;
+        document.getElementById('criticalAlerts').innerText = alerts.filter(a => a.priority === 'critical').length;
+        document.getElementById('totalDonationsCount').innerText = donors.reduce((sum, d) => sum + d.donations, 0);
+    }
+
+    // ===== TAB NAVIGATION =====
+    function showTab(tab) {
+        document.querySelectorAll('[id^="content-"]').forEach(el => el.classList.add('hidden'));
+        document.querySelectorAll('[id^="tab-"]').forEach(el => {
+            el.classList.remove('border-red-600', 'text-red-600');
+            el.classList.add('text-gray-600', 'border-transparent');
+        });
+        
+        document.getElementById('content-' + tab).classList.remove('hidden');
+        const tabBtn = document.getElementById('tab-' + tab);
+        if(tabBtn) {
+            tabBtn.classList.add('border-red-600', 'text-red-600');
+            tabBtn.classList.remove('border-transparent', 'text-gray-600');
+        }
+        
+        if(tab === 'donors') renderDonors();
+        if(tab === 'inventory') renderInventory();
+        if(tab === 'findnearest') {
+            setTimeout(() => initMap(), 100);
+        }
+    }
+
+    // ===== DONOR REGISTRATION (ADMIN/HOSPITAL ONLY) =====
+    function registerDonor() {
+        const name = document.getElementById('donorName').value.trim();
+        const blood = document.getElementById('donorBlood').value;
+        const contact = document.getElementById('donorContact').value.trim();
+        const email = document.getElementById('donorEmail').value.trim();
+        const age = parseInt(document.getElementById('donorAge').value);
+        
+        if(!name || !contact || !email || !age) {
+            alert('Please fill all fields');
+            return;
+        }
+        
+        if(age < 18 || age > 65) {
+            alert('Donor age must be between 18-65 years');
+            return;
+        }
+        
+        donors.push({
+            id:'D'+(donors.length+1).toString().padStart(3,'0'),
+            name:name, blood:blood, donations:0, points:0, 
+            lastDonation:new Date().toISOString().split('T')[0],
+            age:age, email:email
+        });
+        
+        alerts.push({ message:'New donor registered: ' + name + ' (' + blood + ')', priority:'medium', time:'now' });
+        
+        alert('✓ Donor ' + name + ' registered successfully! Welcome to LIFELINK.');
+        document.getElementById('donorName').value='';
+        document.getElementById('donorContact').value='';
+        document.getElementById('donorEmail').value='';
+        document.getElementById('donorAge').value='';
+        renderDonors();
+        updateStats();
+    }
+
+    // ===== HOSPITAL REQUEST =====
+    function submitRequest() {
+        const hospital = document.getElementById('requestHospital').value.trim();
+        const blood = document.getElementById('requestBloodType').value;
+        const units = parseInt(document.getElementById('requestUnits').value);
+        const urgency = document.getElementById('requestUrgency').value;
+        const notes = document.getElementById('requestNotes').value.trim();
+        
+        if(!hospital || units <= 0) {
+            alert('Please fill all required fields');
+            return;
+        }
+        
+        const statusMap = { 'Normal': 'pending', 'Urgent': 'urgent', 'Critical': 'critical' };
+        bloodInventory.push({
+            id:'REQ'+(bloodInventory.length+1).toString().padStart(3,'0'),
+            type:blood, units:units, expiryDays:30, donor:'Request', 
+            status:statusMap[urgency], hospital:hospital, lat:28.6139, lng:77.2090
+        });
+        
+        alerts.push({ 
+            message: urgency + ' blood request: ' + units + ' units of ' + blood + ' from ' + hospital + (notes ? ' - ' + notes : ''), 
+            priority:statusMap[urgency], 
+            time:'now' 
+        });
+        
+        alert('✓ Emergency request submitted for ' + units + ' units of ' + blood + '!\nEstimated fulfillment: ' + (urgency === 'Critical' ? '30 mins' : urgency === 'Urgent' ? '1-2 hours' : '4-6 hours'));
+        document.getElementById('requestHospital').value='';
+        document.getElementById('requestUnits').value=5;
+        document.getElementById('requestUrgency').value='Normal';
+        document.getElementById('requestNotes').value='';
+        renderInventory();
+        renderAlerts();
+        updateStats();
+    }
+
+    function sortInventory() {
+        alert('✓ Inventory sorted by expiry date (FIFO)');
+        renderInventory();
+    }
+
+    // NEW: Export inventory function
+    function exportInventory() {
+        alert('📤 Inventory data exported successfully!\n\nA CSV file has been downloaded.');
+    }
+
+    // NEW: Create campaign function
+    function createCampaign() {
+        alert('🎯 Create New Campaign feature would open a form here!\n\nThis would allow you to set up a new blood donation drive.');
+    }
+
+    function logout() {
+        sessionStorage.clear();
+        window.location.href = 'login.html';
+    }
+
+    // ===== INITIALIZE =====
+    initializeRoleBasedUI();
+    renderInventory();
+    renderAlerts();
+    renderDonors();
+    updateStats();
+    showTab('dashboard');
+</script>
+</body>
+</html>

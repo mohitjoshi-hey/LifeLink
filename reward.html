@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LIFELINK - Rewards & Leaderboard</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    @keyframes fadeIn { from {opacity: 0} to {opacity: 1} }
+    @keyframes slideUp { from {opacity: 0; transform: translateY(20px)} to {opacity: 1; transform: translateY(0)} }
+    .animate-fadeIn { animation: fadeIn 0.6s ease-in; }
+    .animate-slideUp { animation: slideUp 0.5s ease-out; }
+
+    .badge-bronze { background: linear-gradient(135deg, #CD7F32, #8B4513); }
+    .badge-silver { background: linear-gradient(135deg, #C0C0C0, #808080); }
+    .badge-gold { background: linear-gradient(135deg, #FFD700, #FFA500); }
+    .badge-platinum { background: linear-gradient(135deg, #E5E4E2, #B4B4B4); }
+
+    .reward-card:hover { transform: translateY(-4px); box-shadow: 0 8px 20px rgba(0,0,0,0.1); }
+    .leaderboard-item:hover { background-color: #fff7ed; }
+  </style>
+</head>
+
+<body class="bg-gradient-to-br from-red-50 via-white to-yellow-50 min-h-screen">
+
+  <!-- Header -->
+  <header class="bg-gradient-to-r from-red-600 to-orange-600 text-white shadow-lg py-6">
+    <div class="max-w-7xl mx-auto px-6 flex items-center justify-between">
+      <div>
+        <h1 class="text-4xl font-black flex items-center gap-2">
+          <img src="https://cdn-icons-png.flaticon.com/512/992/992700.png" class="w-8 h-8" alt="Trophy Icon">
+          LIFELINK REWARDS
+        </h1>
+        <p class="text-red-100 text-lg">Donate Blood, Earn Rewards, Save Lives!</p>
+      </div>
+      <button onclick="goBack()" class="px-6 py-3 bg-white text-red-600 rounded-lg font-semibold hover:bg-red-50 transition flex items-center gap-2">
+        <img src="https://cdn-icons-png.flaticon.com/512/271/271220.png" class="w-4 h-4" alt="Back Icon"> Back to Dashboard
+      </button>
+    </div>
+  </header>
+
+  <!-- User Stats -->
+  <section class="max-w-7xl mx-auto px-6 py-8">
+    <div class="bg-gradient-to-r from-purple-600 to-pink-600 rounded-2xl shadow-xl p-8 text-white animate-fadeIn">
+      <div class="grid grid-cols-1 md:grid-cols-4 gap-6 text-center">
+        <div>
+          <div class="text-5xl font-black mb-1" id="userPoints">0</div>
+          <p>Total Points</p>
+        </div>
+        <div>
+          <div class="text-5xl font-black mb-1" id="userDonations">0</div>
+          <p>Donations</p>
+        </div>
+        <div>
+          <div class="text-5xl font-black mb-1" id="userRank">#-</div>
+          <p>Global Rank</p>
+        </div>
+        <div>
+          <img src="https://cdn-icons-png.flaticon.com/512/1828/1828884.png" class="w-10 mx-auto mb-1" alt="Badge Icon">
+          <p id="userLevel">Bronze Donor</p>
+        </div>
+      </div>
+      <div class="mt-6">
+        <div class="flex justify-between text-sm mb-2">
+          <span>Progress to <span id="nextLevel">Silver</span></span>
+          <span><span id="currentPoints">0</span>/<span id="targetPoints">500</span> points</span>
+        </div>
+        <div class="w-full bg-white/30 rounded-full h-4">
+          <div class="progress-bar bg-white rounded-full h-4" id="progressBar" style="width: 0%"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Main Content -->
+  <main class="max-w-7xl mx-auto px-6 pb-12 grid grid-cols-1 lg:grid-cols-3 gap-8">
+
+    <!-- Leaderboard -->
+    <section class="lg:col-span-2 bg-white rounded-2xl shadow-xl p-6 animate-slideUp">
+      <div class="flex items-center justify-between mb-6">
+        <h2 class="text-3xl font-bold text-gray-800 flex items-center gap-2">
+          <img src="https://cdn-icons-png.flaticon.com/512/1828/1828817.png" class="w-6 h-6" alt="Medal Icon">
+          Top Donors Leaderboard
+        </h2>
+        <button onclick="refreshLeaderboard()" class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition text-sm font-semibold flex items-center gap-1">
+          <img src="https://cdn-icons-png.flaticon.com/512/159/159807.png" class="w-4 h-4" alt="Refresh Icon">
+          Refresh
+        </button>
+      </div>
+      <div class="space-y-2" id="leaderboardList"></div>
+    </section>
+
+    <!-- Rewards -->
+    <aside class="space-y-6">
+      <div class="bg-white rounded-2xl shadow-xl p-6 animate-slideUp">
+        <h2 class="text-2xl font-bold text-gray-800 mb-4 flex items-center gap-2">
+          <img src="https://cdn-icons-png.flaticon.com/512/4727/4727490.png" class="w-6 h-6" alt="Gift Icon">
+          Redeem Rewards
+        </h2>
+
+        <div class="space-y-3">
+          <div class="reward-card border-2 border-gray-200 rounded-xl p-4" onclick="redeemReward('health',200)">
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-3">
+                <img src="https://cdn-icons-png.flaticon.com/512/2966/2966327.png" class="w-6 h-6" alt="Health Icon">
+                <div>
+                  <div class="font-bold">Free Health Checkup</div>
+                  <div class="text-sm text-gray-600">200 points</div>
+                </div>
+              </div>
+              <button class="px-4 py-2 bg-red-600 text-white rounded-lg text-sm hover:bg-red-700">Redeem</button>
+            </div>
+          </div>
+
+          <div class="reward-card border-2 border-gray-200 rounded-xl p-4" onclick="redeemReward('certificate',300)">
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-3">
+                <img src="https://cdn-icons-png.flaticon.com/512/1828/1828919.png" class="w-6 h-6" alt="Certificate Icon">
+                <div>
+                  <div class="font-bold">Appreciation Certificate</div>
+                  <div class="text-sm text-gray-600">300 points</div>
+                </div>
+              </div>
+              <button class="px-4 py-2 bg-red-600 text-white rounded-lg text-sm hover:bg-red-700">Redeem</button>
+            </div>
+          </div>
+
+          <div class="reward-card border-2 border-gray-200 rounded-xl p-4" onclick="redeemReward('tshirt',500)">
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-3">
+                <img src="https://cdn-icons-png.flaticon.com/512/892/892662.png" class="w-6 h-6" alt="T-shirt Icon">
+                <div>
+                  <div class="font-bold">LIFELINK T-Shirt</div>
+                  <div class="text-sm text-gray-600">500 points</div>
+                </div>
+              </div>
+              <button class="px-4 py-2 bg-red-600 text-white rounded-lg text-sm hover:bg-red-700">Redeem</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </aside>
+  </main>
+
+  <script>
+    let donors = [
+      { name: "Rajesh Kumar", points: 1200, donations: 12, blood: "A+" },
+      { name: "Priya Singh", points: 800, donations: 8, blood: "O-" },
+      { name: "Amit Patel", points: 1500, donations: 15, blood: "B+" },
+      { name: "Sneha Reddy", points: 2000, donations: 20, blood: "AB+" },
+      { name: "Vikram Shah", points: 1000, donations: 10, blood: "O+" },
+    ];
+
+    function renderLeaderboard() {
+      const leaderboardList = document.getElementById("leaderboardList");
+      leaderboardList.innerHTML = "";
+      donors.sort((a, b) => b.points - a.points).forEach((d, i) => {
+        leaderboardList.innerHTML += `
+          <div class="leaderboard-item flex items-center justify-between p-4 rounded-xl border ${i === 0 ? 'border-yellow-400' : 'border-gray-200'}">
+            <div class="flex items-center gap-4">
+              <div class="text-lg font-bold text-gray-500">#${i + 1}</div>
+              <div>
+                <div class="font-bold text-gray-800">${d.name}</div>
+                <div class="text-sm text-gray-600">${d.blood} • ${d.donations} donations</div>
+              </div>
+            </div>
+            <div class="text-right font-semibold text-gray-800">${d.points} pts</div>
+          </div>`;
+      });
+    }
+
+    function redeemReward(type, cost) {
+      alert("Reward redeemed successfully for " + cost + " points!");
+    }
+
+    function refreshLeaderboard() {
+      alert("Leaderboard refreshed!");
+      renderLeaderboard();
+    }
+
+    function goBack() {
+      window.history.back();
+    }
+
+    renderLeaderboard();
+  </script>
+  <!-- Refer & Earn Section -->
+<section class="mt-12 bg-gradient-to-r from-indigo-600 to-purple-600 text-white py-10 px-8 rounded-2xl shadow-lg">
+  <div class="max-w-6xl mx-auto text-center">
+    <h2 class="text-3xl font-bold mb-4 flex items-center justify-center gap-2">
+      <i class="fas fa-gift text-yellow-300"></i>
+      Refer & Earn Rewards
+    </h2>
+    <p class="text-lg mb-8 text-indigo-100">
+      Invite your friends to join <span class="font-semibold">MEDILINK</span> and earn points, discounts, and exclusive insurance benefits!
+    </p>
+
+    <!-- Referral Code Box -->
+    <div class="bg-white text-gray-900 inline-flex items-center justify-between px-4 py-3 rounded-full w-80 mx-auto shadow-md mb-6">
+      <span id="referralCode" class="font-semibold tracking-wider">MLNK2025</span>
+      <button onclick="copyReferralCode()" class="bg-indigo-600 text-white px-4 py-2 rounded-full hover:bg-indigo-700 transition">
+        Copy
+      </button>
+    </div>
+
+    <!-- Share Buttons -->
+    <div class="flex flex-wrap justify-center gap-4 mb-8">
+      <button onclick="shareReferral()" class="bg-white text-indigo-700 font-semibold px-6 py-3 rounded-full hover:bg-indigo-100 transition flex items-center gap-2">
+        <i class="fas fa-share-alt"></i> Share Link
+      </button>
+    </div>
+
+    <!-- Progress Bar -->
+    <div class="max-w-md mx-auto">
+      <div class="flex justify-between text-sm mb-2">
+        <span>Referrals: 3 / 5</span>
+        <span>Next Reward: 50 Points</span>
+      </div>
+      <div class="w-full bg-indigo-300 rounded-full h-3">
+        <div class="bg-yellow-400 h-3 rounded-full" style="width: 30%;"></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Scripts -->
+<script>
+function copyReferralCode() {
+  const code = document.getElementById('referralCode').textContent;
+  navigator.clipboard.writeText(code);
+  alert('Referral code copied: ' + code);
+}
+
+function shareReferral() {
+  const shareText = "Join me on MEDILINK and earn rewards! Use my referral code: MLNK2025";
+  const shareUrl = "https://medilink.com";
+  if (navigator.share) {
+    navigator.share({ title: "MEDILINK Referral", text: shareText, url: shareUrl });
+  } else {
+    alert("Sharing not supported on this device. Copy and share manually.");
+  }
+}
+</script>
+
+</body>
+</html>

@@ -1,0 +1,650 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LIFELINK - Secure Login</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+    <style>
+        @keyframes fadeIn { from{opacity:0}to{opacity:1} }
+        @keyframes slideUp { from{opacity:0;transform:translateY(30px)}to{opacity:1;transform:translateY(0)} }
+        @keyframes slideDown { from{opacity:0;transform:translateY(-30px)}to{opacity:1;transform:translateY(0)} }
+        @keyframes pulse { 0%,100%{opacity:1}50%{opacity:.6} }
+        @keyframes glow { 0%{box-shadow:0 0 5px rgba(220,38,38,0.5)}50%{box-shadow:0 0 20px rgba(220,38,38,0.8)}100%{box-shadow:0 0 5px rgba(220,38,38,0.5)} }
+        .animate-fadeIn { animation: fadeIn 0.6s ease-in; }
+        .animate-slideUp { animation: slideUp 0.6s ease-out; }
+        .animate-slideDown { animation: slideDown 0.6s ease-out; }
+        .animate-pulse-custom { animation: pulse 2s ease-in-out infinite; }
+        .animate-glow { animation: glow 2s ease-in-out infinite; }
+        .glass-effect { background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(10px); border: 1px solid rgba(255, 255, 255, 0.2); }
+        .gradient-text { background: linear-gradient(135deg, #dc2626, #991b1b); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        .gradient-bg { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
+        .blood-gradient { background: linear-gradient(135deg, #dc2626, #f87171); }
+        .otp-input { width: 50px; height: 50px; font-size: 24px; text-align: center; border: 2px solid #e5e7eb; border-radius: 0.75rem; transition: all 0.3s; }
+        .otp-input:focus { border-color: #dc2626; box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.1); outline: none; }
+        .otp-input.filled { background: #fef3c7; border-color: #dc2626; }
+        #map { height: 400px; border-radius: 1rem; }
+        .step-indicator { width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; border-radius: 50%; font-weight: bold; font-size: 18px; }
+        .step-active { background: linear-gradient(135deg, #dc2626, #991b1b); color: white; }
+        .step-inactive { background: #e5e7eb; color: #9ca3af; }
+        .role-card { padding: 1.5rem; border-radius: 1rem; border: 2px solid #e5e7eb; cursor: pointer; transition: all 0.3s; }
+        .role-card:hover { border-color: #dc2626; transform: translateY(-4px); box-shadow: 0 10px 20px rgba(0, 0, 0, 0.1); }
+        .role-card.selected { background: linear-gradient(135deg, #fef3c7, #fef08a); border-color: #dc2626; }
+        .icon-large { font-size: 3rem; margin-bottom: 0.5rem; }
+        .loading-spinner { border: 3px solid #f3f4f6; border-top: 3px solid #dc2626; border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; }
+        @keyframes spin { 0%{transform:rotate(0deg)}100%{transform:rotate(360deg)} }
+        .success-checkmark { width: 80px; height: 80px; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: #d1fae5; }
+        .error-alert { background: #fee2e2; border-left: 4px solid #dc2626; color: #991b1b; }
+        .success-alert { background: #d1fae5; border-left: 4px solid #059669; color: #065f46; }
+    </style>
+</head>
+<body class="bg-gradient-to-br from-red-50 via-slate-50 to-red-100 min-h-screen overflow-x-hidden">
+
+<!-- Background Elements -->
+<div class="fixed top-0 right-0 w-96 h-96 bg-red-200 rounded-full mix-blend-multiply filter blur-3xl opacity-20 -z-10"></div>
+<div class="fixed bottom-0 left-0 w-96 h-96 bg-purple-200 rounded-full mix-blend-multiply filter blur-3xl opacity-20 -z-10"></div>
+
+<!-- Main Container -->
+
+<div class="min-h-screen flex items-center justify-center p-4">
+    <div class="w-full max-w-5xl">
+        
+        <!-- Multi-Step Login Container -->
+        <div id="loginContainer" class="glass-effect rounded-3xl shadow-2xl overflow-hidden">
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-0">
+                
+                <!-- Left Side - Branding -->
+                <div class="blood-gradient hidden lg:flex flex-col justify-between p-12 text-white relative overflow-hidden">
+                    <div class="absolute top-0 right-0 w-40 h-40 bg-white opacity-10 rounded-full -mr-20 -mt-20"></div>
+                    <div class="absolute bottom-0 left-0 w-40 h-40 bg-white opacity-10 rounded-full -ml-20 -mb-20"></div>
+                    
+                    <div class="relative z-10">
+                        <div class="flex items-center gap-4 mb-8">
+                            <div class="bg-white bg-opacity-20 p-3 rounded-lg backdrop-blur">
+                                <svg class="w-12 h-12" fill="white" viewBox="0 0 24 24">
+                                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm3.5-9c.83 0 1.5-.67 1.5-1.5S16.33 8 15.5 8 14 8.67 14 9.5s.67 1.5 1.5 1.5zm-7 0c.83 0 1.5-.67 1.5-1.5S9.33 8 8.5 8 7 8.67 7 9.5 7.67 11 8.5 11zm3.5 6.5c2.33 0 4.31-1.46 5.11-3.5H6.89c.8 2.04 2.78 3.5 5.11 3.5z"/>
+                                </svg>
+                            </div>
+                            <div>
+                                <h1 class="text-4xl font-black">LIFELINK</h1>
+                                <p class="text-red-100 text-sm font-medium">Blockchain Blood Bank</p>
+                            </div>
+                        </div>
+                        <h2 class="text-3xl font-bold mb-4">Save Lives, Donate Blood</h2>
+                        <p class="text-red-100 text-lg leading-relaxed">Join our network of donors, hospitals, and blood banks. Together, we're making blood donation faster, safer, and more transparent than ever.</p>
+                    </div>
+                    
+                    <div class="relative z-10 space-y-4">
+                        <div class="flex items-center gap-3">
+                            <svg class="w-6 h-6" fill="white" viewBox="0 0 24 24"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>
+                            <span>Blockchain Secured</span>
+                        </div>
+                        <div class="flex items-center gap-3">
+                            <svg class="w-6 h-6" fill="white" viewBox="0 0 24 24"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>
+                            <span>Real-time Location Tracking</span>
+                        </div>
+                        <div class="flex items-center gap-3">
+                            <svg class="w-6 h-6" fill="white" viewBox="0 0 24 24"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>
+                            <span>Verified OTP Authentication</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Right Side - Login Form -->
+                <div class="p-12 animate-slideUp">
+                    
+                    <!-- Step Progress Indicators -->
+                    <div class="flex justify-between items-center mb-12">
+                        <div class="step-indicator step-active" id="step1Indicator">1</div>
+                        <div class="h-1 flex-1 mx-2 bg-gray-200" id="progressLine1"></div>
+                        <div class="step-indicator step-inactive" id="step2Indicator">2</div>
+                        <div class="h-1 flex-1 mx-2 bg-gray-200" id="progressLine2"></div>
+                        <div class="step-indicator step-inactive" id="step3Indicator">3</div>
+                        <div class="h-1 flex-1 mx-2 bg-gray-200" id="progressLine3"></div>
+                        <div class="step-indicator step-inactive" id="step4Indicator">4</div>
+                    </div>
+                    
+                    <!-- Step 1: Phone & Email -->
+                    <div id="step1" class="animate-slideUp">
+                        <h3 class="text-2xl font-bold text-gray-800 mb-2">Create Your Account</h3>
+                        <p class="text-gray-600 mb-6">Let's start with your contact details</p>
+                        
+                        <div class="space-y-4">
+                            <div>
+                                <label class="block text-sm font-semibold text-gray-700 mb-2">Full Name</label>
+                                <input type="text" id="fullName" placeholder="Enter your full name" class="w-full border border-gray-300 p-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-600 transition">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-semibold text-gray-700 mb-2">Phone Number</label>
+                                <input type="tel" id="phoneNumber" placeholder="+91 XXXXXXXXXX" class="w-full border border-gray-300 p-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-600 transition">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-semibold text-gray-700 mb-2">Email Address</label>
+                                <input type="email" id="emailAddress" placeholder="your@email.com" class="w-full border border-gray-300 p-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-600 transition">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-semibold text-gray-700 mb-2">Password</label>
+                                <input type="password" id="password" placeholder="Create a strong password" class="w-full border border-gray-300 p-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-600 transition">
+                            </div>
+                            <div id="alertStep1" class="hidden p-3 rounded-lg text-sm"></div>
+                            <button onclick="nextStep(1)" class="w-full bg-gradient-to-r from-red-600 to-red-700 text-white font-semibold py-3 rounded-lg hover:shadow-lg transition transform hover:scale-105">Continue to OTP Verification</button>
+                        </div>
+                    </div>
+                    
+                    <!-- Step 2: OTP Verification -->
+                    <div id="step2" class="hidden animate-slideUp">
+                        <h3 class="text-2xl font-bold text-gray-800 mb-2">Verify Your Phone</h3>
+                        <p class="text-gray-600 mb-6">Enter the 6-digit OTP sent to <span id="displayPhone" class="font-semibold text-red-600"></span></p>
+                        
+                        <div class="space-y-6">
+                            <div class="flex justify-center gap-3 mb-6">
+                                <input type="text" maxlength="1" class="otp-input" id="otp1" oninput="moveOtpFocus(this, 'otp2')">
+                                <input type="text" maxlength="1" class="otp-input" id="otp2" oninput="moveOtpFocus(this, 'otp3')">
+                                <input type="text" maxlength="1" class="otp-input" id="otp3" oninput="moveOtpFocus(this, 'otp4')">
+                                <input type="text" maxlength="1" class="otp-input" id="otp4" oninput="moveOtpFocus(this, 'otp5')">
+                                <input type="text" maxlength="1" class="otp-input" id="otp5" oninput="moveOtpFocus(this, 'otp6')">
+                                <input type="text" maxlength="1" class="otp-input" id="otp6" oninput="moveOtpFocus(this, null)">
+                            </div>
+                            
+                            <div class="flex items-center justify-between">
+                                <span class="text-sm text-gray-600">Didn't receive OTP?</span>
+                                <button onclick="resendOtp()" class="text-red-600 font-semibold hover:text-red-700 transition">Resend (<span id="otpTimer">30</span>s)</button>
+                            </div>
+                            
+                            <div id="alertStep2" class="hidden p-3 rounded-lg text-sm"></div>
+                            
+                            <div class="flex gap-3">
+                                <button onclick="prevStep(2)" class="flex-1 border border-gray-300 text-gray-700 font-semibold py-3 rounded-lg hover:bg-gray-50 transition">Back</button>
+                                <button onclick="nextStep(2)" class="flex-1 bg-gradient-to-r from-red-600 to-red-700 text-white font-semibold py-3 rounded-lg hover:shadow-lg transition transform hover:scale-105">Verify OTP</button>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Step 3: Select Role -->
+                    <div id="step3" class="hidden animate-slideUp">
+                        <h3 class="text-2xl font-bold text-gray-800 mb-2">Choose Your Role</h3>
+                        <p class="text-gray-600 mb-6">Select how you'll use LIFELINK</p>
+                        
+                        <div class="space-y-3 mb-6">
+                            <div class="role-card" onclick="selectRole('donor', this)">
+                                <div class="flex items-start gap-4">
+                                    <div class="icon-large">🩸</div>
+                                    <div>
+                                        <h4 class="text-lg font-bold text-gray-800">Blood Donor</h4>
+                                        <p class="text-sm text-gray-600">Help save lives by donating blood</p>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="role-card" onclick="selectRole('hospital', this)">
+                                <div class="flex items-start gap-4">
+                                    <div class="icon-large">🏥</div>
+                                    <div>
+                                        <h4 class="text-lg font-bold text-gray-800">Hospital/Medical Staff</h4>
+                                        <p class="text-sm text-gray-600">Request and manage blood inventory</p>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="role-card" onclick="selectRole('admin', this)">
+                                <div class="flex items-start gap-4">
+                                    <div class="icon-large">⚙️</div>
+                                    <div>
+                                        <h4 class="text-lg font-bold text-gray-800">Administrator</h4>
+                                        <p class="text-sm text-gray-600">Manage the entire blood bank system</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div id="alertStep3" class="hidden p-3 rounded-lg text-sm mb-4"></div>
+                        
+                        <div class="flex gap-3">
+                            <button onclick="prevStep(3)" class="flex-1 border border-gray-300 text-gray-700 font-semibold py-3 rounded-lg hover:bg-gray-50 transition">Back</button>
+                            <button onclick="nextStep(3)" id="roleNextBtn" class="flex-1 bg-gray-400 text-white font-semibold py-3 rounded-lg cursor-not-allowed" disabled>Continue</button>
+                        </div>
+                    </div>
+                    
+                    <!-- Step 4: Location -->
+                    <div id="step4" class="hidden animate-slideUp">
+                        <h3 class="text-2xl font-bold text-gray-800 mb-2">Share Your Location</h3>
+                        <p class="text-gray-600 mb-6">Help us find the nearest blood bank for you</p>
+                        
+                        <div class="space-y-4">
+                            <div id="map"></div>
+                            
+                            <div class="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label class="block text-sm font-semibold text-gray-700 mb-2">Latitude</label>
+                                    <input type="text" id="locLatitude" placeholder="28.6139" class="w-full border border-gray-300 p-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-600 transition" readonly>
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-semibold text-gray-700 mb-2">Longitude</label>
+                                    <input type="text" id="locLongitude" placeholder="77.2090" class="w-full border border-gray-300 p-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-600 transition" readonly>
+                                </div>
+                            </div>
+                            
+                            <button onclick="getCurrentLocationFunc()" class="w-full bg-blue-600 text-white font-semibold py-3 rounded-lg hover:bg-blue-700 transition flex items-center justify-center gap-2">
+                                <span>📍</span>
+                                <span>Detect My Location</span>
+                            </button>
+                            
+                            <div id="alertStep4" class="hidden p-3 rounded-lg text-sm"></div>
+                            
+                            <div class="flex gap-3">
+                                <button onclick="prevStep(4)" class="flex-1 border border-gray-300 text-gray-700 font-semibold py-3 rounded-lg hover:bg-gray-50 transition">Back</button>
+                                <button onclick="completeRegistration()" class="flex-1 bg-gradient-to-r from-green-600 to-green-700 text-white font-semibold py-3 rounded-lg hover:shadow-lg transition transform hover:scale-105">Complete Registration</button>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Success Screen -->
+                    <div id="successScreen" class="hidden animate-slideUp text-center">
+                        <div class="mb-6 flex justify-center">
+                            <div class="success-checkmark">
+                                <svg class="w-16 h-16 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                                </svg>
+                            </div>
+                        </div>
+                        <h2 class="text-3xl font-bold text-gray-800 mb-2">Welcome to LIFELINK!</h2>
+                        <p class="text-gray-600 mb-8">Your account has been created successfully.<br>You're now part of our life-saving network.</p>
+                        
+                        <div class="bg-gradient-to-r from-red-50 to-pink-50 p-6 rounded-lg mb-8">
+                            <p class="font-semibold text-gray-800 mb-2">Account Details:</p>
+                            <p class="text-sm text-gray-600">Name: <span id="displayName" class="font-semibold text-gray-800"></span></p>
+                            <p class="text-sm text-gray-600">Role: <span id="displayRole" class="font-semibold text-red-600"></span></p>
+                            <p class="text-sm text-gray-600">Location: <span id="displayLocation" class="font-semibold text-gray-800"></span></p>
+                        </div>
+                        
+                        <button onclick="goToDashboard()" class="w-full bg-gradient-to-r from-red-600 to-red-700 text-white font-semibold py-4 rounded-lg hover:shadow-lg transition transform hover:scale-105 text-lg">
+                            Go to Dashboard
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    let currentStep = 1;
+    let selectedRole = null;
+    let userLocation = { lat: null, lng: null };
+    let map;
+    let userMarker;
+    let otpTimerInterval;
+    
+    // Mock user database
+    let userData = {
+        fullName: '',
+        phoneNumber: '',
+        emailAddress: '',
+        password: '',
+        role: '',
+        latitude: '',
+        longitude: ''
+    };
+
+    // ===== OTP FUNCTIONS =====
+    function moveOtpFocus(input, nextId) {
+        if(input.value.length === 1) {
+            if(nextId) {
+                document.getElementById(nextId).focus();
+            }
+        }
+        updateOtpInputClasses();
+    }
+
+    function updateOtpInputClasses() {
+        for(let i = 1; i <= 6; i++) {
+            const input = document.getElementById('otp' + i);
+            if(input.value) {
+                input.classList.add('filled');
+            } else {
+                input.classList.remove('filled');
+            }
+        }
+    }
+
+    function generateOtp() {
+        return Math.floor(100000 + Math.random() * 900000).toString();
+    }
+
+    function resendOtp() {
+        let timeLeft = 30;
+        document.getElementById('otpTimer').textContent = timeLeft;
+        
+        clearInterval(otpTimerInterval);
+        otpTimerInterval = setInterval(() => {
+            timeLeft--;
+            document.getElementById('otpTimer').textContent = timeLeft;
+            if(timeLeft <= 0) clearInterval(otpTimerInterval);
+        }, 1000);
+        
+        showAlert('step2', 'OTP resent successfully!', 'success-alert');
+        clearOtpInputs();
+    }
+
+    function clearOtpInputs() {
+        for(let i = 1; i <= 6; i++) {
+            document.getElementById('otp' + i).value = '';
+            document.getElementById('otp' + i).classList.remove('filled');
+        }
+        document.getElementById('otp1').focus();
+    }
+
+    function getOtpValue() {
+        let otp = '';
+        for(let i = 1; i <= 6; i++) {
+            otp += document.getElementById('otp' + i).value;
+        }
+        return otp;
+    }
+
+    // ===== VALIDATION FUNCTIONS =====
+    function validateStep1() {
+        const fullName = document.getElementById('fullName').value.trim();
+        const phoneNumber = document.getElementById('phoneNumber').value.trim();
+        const emailAddress = document.getElementById('emailAddress').value.trim();
+        const password = document.getElementById('password').value.trim();
+
+        if(!fullName) {
+            showAlert('step1', 'Please enter your full name', 'error-alert');
+            return false;
+        }
+        if(!phoneNumber || phoneNumber.length < 10) {
+            showAlert('step1', 'Please enter a valid phone number', 'error-alert');
+            return false;
+        }
+        if(!emailAddress || !emailAddress.includes('@')) {
+            showAlert('step1', 'Please enter a valid email address', 'error-alert');
+            return false;
+        }
+        if(!password || password.length < 6) {
+            showAlert('step1', 'Password must be at least 6 characters', 'error-alert');
+            return false;
+        }
+
+        userData.fullName = fullName;
+        userData.phoneNumber = phoneNumber;
+        userData.emailAddress = emailAddress;
+        userData.password = password;
+
+        showAlert('step1', 'Sending OTP to ' + phoneNumber, 'success-alert');
+        return true;
+    }
+
+    function validateStep2() {
+        const otp = getOtpValue();
+        const mockOtp = '123456'; // Demo OTP
+
+        if(otp.length !== 6) {
+            showAlert('step2', 'Please enter all 6 digits', 'error-alert');
+            return false;
+        }
+        if(otp !== mockOtp) {
+            showAlert('step2', 'Invalid OTP. Demo OTP is: 123456', 'error-alert');
+            return false;
+        }
+
+        showAlert('step2', 'Phone number verified successfully!', 'success-alert');
+        return true;
+    }
+
+    function validateStep3() {
+        if(!selectedRole) {
+            showAlert('step3', 'Please select a role to continue', 'error-alert');
+            return false;
+        }
+        userData.role = selectedRole;
+        return true;
+    }
+
+    function validateStep4() {
+        if(!userLocation.lat || !userLocation.lng) {
+            showAlert('step4', 'Please share your location to continue', 'error-alert');
+            return false;
+        }
+        userData.latitude = userLocation.lat;
+        userData.longitude = userLocation.lng;
+        return true;
+    }
+
+    // ===== STEP NAVIGATION =====
+    function showStep(step) {
+        document.querySelectorAll('[id^="step"]').forEach(el => {
+            if(el.id !== 'successScreen') el.classList.add('hidden');
+        });
+        document.getElementById('step' + step).classList.remove('hidden');
+        
+        updateProgressBar(step);
+        
+        if(step === 2) {
+            document.getElementById('displayPhone').textContent = userData.phoneNumber;
+            clearOtpInputs();
+            resendOtp();
+        } else if(step === 4) {
+            setTimeout(() => {
+                if(!map) initMap();
+            }, 300);
+        }
+    }
+
+    function updateProgressBar(step) {
+        for(let i = 1; i <= 4; i++) {
+            const indicator = document.getElementById('step' + i + 'Indicator');
+            const line = document.getElementById('progressLine' + i);
+            
+            if(i <= step) {
+                indicator.classList.remove('step-inactive');
+                indicator.classList.add('step-active');
+                if(line) line.classList.add('bg-red-600');
+            } else {
+                indicator.classList.add('step-inactive');
+                indicator.classList.remove('step-active');
+                if(line) line.classList.remove('bg-red-600');
+            }
+        }
+    }
+
+    function nextStep(step) {
+        let isValid = false;
+
+        if(step === 1) isValid = validateStep1();
+        else if(step === 2) isValid = validateStep2();
+        else if(step === 3) isValid = validateStep3();
+        else if(step === 4) isValid = validateStep4();
+
+        if(isValid) {
+            currentStep = step + 1;
+            if(currentStep <= 4) {
+                showStep(currentStep);
+            } else {
+                showSuccessScreen();
+            }
+        }
+    }
+
+    function prevStep(step) {
+        currentStep = step - 1;
+        showStep(currentStep);
+    }
+
+    function selectRole(role, element) {
+        selectedRole = role;
+        document.querySelectorAll('.role-card').forEach(card => card.classList.remove('selected'));
+        element.classList.add('selected');
+        
+        const roleBtn = document.getElementById('roleNextBtn');
+        roleBtn.disabled = false;
+        roleBtn.classList.remove('bg-gray-400', 'cursor-not-allowed');
+        roleBtn.classList.add('bg-gradient-to-r', 'from-red-600', 'to-red-700');
+    }
+
+    // ===== MAP FUNCTIONS =====
+    function initMap() {
+        const mapElement = document.getElementById('map');
+        if(mapElement && !map) {
+            try {
+                map = L.map('map').setView([28.6139, 77.2090], 13);
+                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                    attribution: '© OpenStreetMap contributors',
+                    maxZoom: 19
+                }).addTo(map);
+                
+                console.log('Map initialized successfully');
+                
+                map.on('click', function(e) {
+                    setLocationMarker(e.latlng.lat, e.latlng.lng);
+                });
+            } catch(error) {
+                console.error('Map initialization error:', error);
+            }
+        }
+    }
+
+    function getCurrentLocationFunc() {
+        console.log('Getting location...');
+        const alertDiv = document.getElementById('alertStep4');
+        
+        if(!navigator.geolocation) {
+            alertDiv.classList.remove('hidden');
+            alertDiv.className = 'error-alert p-3 rounded-lg text-sm';
+            alertDiv.textContent = '❌ Geolocation not supported. Please enter manually.';
+            return;
+        }
+        
+        alertDiv.classList.remove('hidden');
+        alertDiv.className = 'success-alert p-3 rounded-lg text-sm';
+        alertDiv.textContent = '📍 Getting your location...';
+        
+        navigator.geolocation.getCurrentPosition(
+            function(position) {
+                const lat = position.coords.latitude;
+                const lng = position.coords.longitude;
+                console.log('Location found:', lat, lng);
+                
+                userLocation.lat = parseFloat(lat.toFixed(4));
+                userLocation.lng = parseFloat(lng.toFixed(4));
+                
+                document.getElementById('locLatitude').value = userLocation.lat;
+                document.getElementById('locLongitude').value = userLocation.lng;
+                
+                if(map && userMarker) {
+                    map.removeLayer(userMarker);
+                }
+                
+                if(map) {
+                    userMarker = L.marker([lat, lng]).addTo(map)
+                        .bindPopup('📍 Your Location').openPopup();
+                    map.setView([lat, lng], 15);
+                }
+                
+                alertDiv.className = 'success-alert p-3 rounded-lg text-sm';
+                alertDiv.textContent = '✓ Location captured: ' + lat.toFixed(4) + ', ' + lng.toFixed(4);
+                setTimeout(() => alertDiv.classList.add('hidden'), 4000);
+            },
+            function(error) {
+                console.error('Geolocation error:', error);
+                alertDiv.className = 'error-alert p-3 rounded-lg text-sm';
+                
+                if(error.code === 1) {
+                    alertDiv.textContent = '❌ Location permission denied. Please click on map or enter manually.';
+                } else if(error.code === 2) {
+                    alertDiv.textContent = '❌ Location unavailable. Please click on map or enter manually.';
+                } else {
+                    alertDiv.textContent = '❌ Error getting location. Please try again.';
+                }
+            },
+            {
+                enableHighAccuracy: true,
+                timeout: 10000,
+                maximumAge: 0
+            }
+        );
+    }
+
+    function setLocationMarker(lat, lng) {
+        console.log('Setting marker at:', lat, lng);
+        userLocation.lat = parseFloat(lat.toFixed(4));
+        userLocation.lng = parseFloat(lng.toFixed(4));
+        
+        document.getElementById('locLatitude').value = userLocation.lat;
+        document.getElementById('locLongitude').value = userLocation.lng;
+        
+        if(map) {
+            if(userMarker) {
+                map.removeLayer(userMarker);
+            }
+            
+            userMarker = L.marker([lat, lng]).addTo(map)
+                .bindPopup('📍 Selected Location').openPopup();
+            
+            map.setView([lat, lng], 15);
+        }
+        
+        const alertDiv = document.getElementById('alertStep4');
+        alertDiv.classList.remove('hidden');
+        alertDiv.className = 'success-alert p-3 rounded-lg text-sm';
+        alertDiv.textContent = '✓ Location set: ' + userLocation.lat + ', ' + userLocation.lng;
+        setTimeout(() => alertDiv.classList.add('hidden'), 3000);
+    }
+
+    // ===== COMPLETION FUNCTIONS =====
+    function completeRegistration() {
+        if(validateStep4()) {
+            showSuccessScreen();
+        }
+    }
+
+    function showSuccessScreen() {
+        document.querySelectorAll('[id^="step"]').forEach(el => el.classList.add('hidden'));
+        document.getElementById('successScreen').classList.remove('hidden');
+        
+        document.getElementById('displayName').textContent = userData.fullName;
+        document.getElementById('displayRole').textContent = userData.role.charAt(0).toUpperCase() + userData.role.slice(1);
+        document.getElementById('displayLocation').textContent = `${userData.latitude}, ${userData.longitude}`;
+        
+        // Save to sessionStorage
+        sessionStorage.setItem('userRole', userData.role);
+        sessionStorage.setItem('userName', userData.fullName);
+        sessionStorage.setItem('userEmail', userData.emailAddress);
+        sessionStorage.setItem('userLat', userData.latitude);
+        sessionStorage.setItem('userLng', userData.longitude);
+        sessionStorage.setItem('isLoggedIn', 'true');
+    }
+
+    function goToDashboard() {
+        // Redirect to main dashboard
+        window.location.href = 'mainpage.html';
+        // Or if on same page, you can reload with different content
+        alert('Redirecting to Dashboard... (In production, this would load the main dashboard)');
+    }
+
+    // ===== UTILITY FUNCTIONS =====
+    function showAlert(step, message, type) {
+        const alertDiv = document.getElementById('alert' + step.charAt(0).toUpperCase() + step.slice(1));
+        alertDiv.textContent = message;
+        alertDiv.className = type + ' p-3 rounded-lg text-sm';
+        alertDiv.classList.remove('hidden');
+        setTimeout(() => {
+            alertDiv.classList.add('hidden');
+        }, 5000);
+    }
+
+    // ===== INITIALIZE =====
+    document.addEventListener('DOMContentLoaded', () => {
+        showStep(1);
+        
+        // Auto-fill demo data for testing
+        document.getElementById('fullName').value = 'Rajesh Kumar';
+        document.getElementById('phoneNumber').value = '+91 9876543210';
+        document.getElementById('emailAddress').value = 'rajesh@lifelink.com';
+        document.getElementById('password').value = 'Password123';
+    });
+</script>
+</body>
+</html>
